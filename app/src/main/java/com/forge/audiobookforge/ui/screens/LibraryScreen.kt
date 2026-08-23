@@ -115,18 +115,23 @@ private fun ModelProgressCard() {
     val modelUi by container.models.ui.collectAsState()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("Downloading Kokoro model…", style = MaterialTheme.typography.titleMedium)
+            Text("Downloading voice model…", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "${modelUi.phaseLabel} · ${(modelUi.progress * 100).toInt()}% of archive",
+                modelUi.phaseLabel.ifEmpty { "Working…" } +
+                    if (!modelUi.indeterminate) " · ${(modelUi.progress * 100).toInt()}% of archive" else "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { modelUi.progress },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (modelUi.indeterminate) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(
+                    progress = { modelUi.progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 "The download lands in cache first, then extracts into app storage — the app's reported size will jump around until it finishes.",

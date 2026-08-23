@@ -240,12 +240,16 @@ fun BookDetailScreen(bookId: String?) {
                             ) { Text("Download voice model (≈126 MB)") }
                             if (modelUi.downloading) {
                                 Spacer(Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    progress = { modelUi.progress },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
+                                if (modelUi.indeterminate) {
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                } else {
+                                    LinearProgressIndicator(
+                                        progress = { modelUi.progress },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
                                 Text(
-                                    "${modelUi.phaseLabel} · ${(modelUi.progress * 100).toInt()}%",
+                                    modelUi.phaseLabel + if (!modelUi.indeterminate) " · ${(modelUi.progress * 100).toInt()}%" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }

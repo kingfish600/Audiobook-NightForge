@@ -53,9 +53,13 @@ fun SettingsScreen() {
                 )
                 if (modelUi.downloading) {
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(progress = { modelUi.progress }, modifier = Modifier.fillMaxWidth())
+                    if (modelUi.indeterminate) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(progress = { modelUi.progress }, modifier = Modifier.fillMaxWidth())
+                    }
                     Text(
-                        "${modelUi.phaseLabel} · ${(modelUi.progress * 100).toInt()}%",
+                        modelUi.phaseLabel + if (!modelUi.indeterminate) " · ${(modelUi.progress * 100).toInt()}%" else "",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

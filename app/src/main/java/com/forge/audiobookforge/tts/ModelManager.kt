@@ -37,6 +37,7 @@ class ModelManager(private val context: Context) {
         val int8Available: Boolean = false,
         val downloading: Boolean = false,
         val progress: Float = 0f,
+        val indeterminate: Boolean = false,
         val phaseLabel: String = "",
         val error: String? = null,
     )
@@ -92,9 +93,16 @@ class ModelManager(private val context: Context) {
             val archive = File(context.cacheDir, "${option.id}.tar.bz2")
             downloadFile(option.url, archive)
 
-            update { it.copy(progress = 0f, phaseLabel = "Extracting…") }
+            update { it.copy(progress = 0f, indeterminate = true, phaseLabel = "Extracting…") }
             val stage = File(modelsRoot, "stage").apply { deleteRecursively(); mkdirs() }
-            extractTarBz2(archive, stage)
+            var filesSeen = 0
+            extractTarBz2(archive, stage) {
+                filesSeen = it
+                if (it % 50 == 0) {
+                    update { ui -> ui.copy(phaseLabel = "Extracting… $it files") }
+                }
+            }
+            update { it.copy(indeterminate = false, phaseLabel = "Extracted $filesSeen files") }
             archive.delete()
 
             val inner = stage.listFiles { f -> f.isDirectory }?.firstOrNull() ?: stage
@@ -155,7 +163,8 @@ class ModelManager(private val context: Context) {
         }
     }
 
-    private fun extractTarBz2(archive: File, destDir: File) {
+    private fun extractTarBz2(archive: File, destDir: File, onFileExtracted: (Int) -> Unit = {}) {
+        var count = 0
         TarArchiveInputStream(BZip2CompressorInputStream(archive.inputStream().buffered(1 shl 16))).use { tar ->
             while (true) {
                 val entry = tar.nextTarEntry ?: break
@@ -164,6 +173,8 @@ class ModelManager(private val context: Context) {
                 check(outFile.path.startsWith(destDir.canonicalPath)) { "Bad archive entry: ${entry.name}" }
                 outFile.parentFile?.mkdirs()
                 outFile.outputStream().use { tar.copyTo(it) }
+                count++
+                onFileExtracted(count)
             }
         }
     }
