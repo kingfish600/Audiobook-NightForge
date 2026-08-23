@@ -42,9 +42,12 @@ object TextOps {
         return out.filter { it.isNotBlank() }
     }
 
-    /** Paragraph-aware chunking used before TTS synthesis. */
+    /** Sentence-aware chunking used before TTS synthesis.
+     *  Packs across paragraph boundaries — dialogue-heavy books have hundreds
+     *  of one-line paragraphs, and per-paragraph chunking turns them into
+     *  hundreds of tiny engine calls that dominate render time. */
     fun splitIntoChunks(text: String, maxLen: Int = 280): List<String> =
-        paragraphs(text).flatMap { packSentences(sentences(it), maxLen) }
+        packSentences(sentences(text), maxLen)
 
     private fun hardSplit(s: String, maxLen: Int): List<String> {
         val words = s.split(Regex("\\s+"))

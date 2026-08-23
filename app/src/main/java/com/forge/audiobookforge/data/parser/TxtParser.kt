@@ -34,8 +34,10 @@ object TxtParser {
             }
             out
         } else {
-            // No reliable headings: chunk by size at sentence boundaries.
-            TextOps.splitIntoChunks(text, maxLen = 3500)
+            // No reliable headings: split the whole story into ~4k-char parts at
+            // sentence boundaries (packSentences merges across paragraphs, so
+            // dialogue-heavy stories don't explode into one part per spoken line).
+            TextOps.packSentences(TextOps.sentences(text), maxLen = 4000)
                 .mapIndexed { i, c -> EpubParser.ParsedChapter("Part ${i + 1}", c) }
         }.filter { it.text.isNotBlank() }
 
