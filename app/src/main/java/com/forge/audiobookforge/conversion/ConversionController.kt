@@ -37,12 +37,17 @@ class ConversionController {
     @Volatile
     var cancelRequested: Boolean = false
 
+    /** After Stop is tapped, ignore progress updates from the dying run until it exits. */
+    @Volatile
+    private var suppressUpdates: Boolean = false
+
     @Volatile
     private var runSeq: Long = 0L
 
     /** Called at the start of every worker run; returns the id of this run. */
     fun beginRun(): Long {
         cancelRequested = false
+        suppressUpdates = false
         runSeq += 1
         return runSeq
     }
@@ -54,20 +59,29 @@ class ConversionController {
      */
     fun endRun(runId: Long) {
         if (runId != runSeq) return
+        suppressUpdates = false
         if (_state.value !is ConversionState.Idle) {
             cancelRequested = false
             _state.value = ConversionState.Idle
         }
     }
 
-    fun update(s: ConversionState) { _state.value = s }
+    fun update(s: ConversionState) {
+        if (suppressUpdates && s is ConversionState.Running) return
+        _state.value = s
+    }
 
     fun fail(message: String, bookId: String? = null) {
         _state.value = ConversionState.Failed(bookId, message)
     }
 
-    /** Optimistic UI feedback on Stop. Does NOT clear [cancelRequested] — the worker needs it. */
+    /**
+     * Optimistic UI feedback on Stop. Does NOT clear [cancelRequested] — the worker
+     * still needs to see it at the next chunk boundary — but from now on this dying
+     * run may no longer push progress back onto screen.
+     */
     fun markUiStopped() {
+        suppressUpdates = true
         _state.value = ConversionState.Idle
     }
 

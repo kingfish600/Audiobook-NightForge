@@ -226,6 +226,27 @@ fun BookDetailScreen(bookId: String?) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Text(if (book.doneCount > 0) "  Continue rendering" else "  Render audiobook")
                             }
+                            if (book.doneCount > 0) {
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        snackbarScope.launch {
+                                            val count = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                com.forge.audiobookforge.audio.BookExporter.export(
+                                                    book,
+                                                    container.library.audioDir(book.id),
+                                                    context,
+                                                )
+                                            }
+                                            snackbar.showSnackbar(
+                                                if (count > 0) "Exported $count chapter(s) to Music/AudiobookForge/"
+                                                else "Nothing exported — no finished chapter files found"
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Export ${book.doneCount} chapter(s) to Music library") }
+                            }
                         }
                         else -> {
                             Text(
