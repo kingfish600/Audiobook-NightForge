@@ -114,12 +114,15 @@ class KokoroEngine {
         fun chooseModelFile(modelDir: File, preferInt8: Boolean): File? {
             val int8 = File(modelDir, "model.int8.onnx")
             val full = File(modelDir, "model.onnx")
-            return when {
-                preferInt8 && int8.isFile -> int8
-                full.isFile -> full
-                int8.isFile -> int8
-                else -> null
+            when {
+                preferInt8 && int8.isFile -> return int8
+                full.isFile -> return full
+                int8.isFile -> return int8
             }
+            // Fallback for bundles that name their weights differently,
+            // e.g. piper ships "en_US-lessac-medium.onnx".
+            return modelDir.listFiles { f -> f.isFile && f.name.endsWith(".onnx") }
+                ?.sortedBy { it.name }?.firstOrNull()
         }
     }
 }

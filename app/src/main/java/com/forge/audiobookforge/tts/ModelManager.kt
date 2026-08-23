@@ -114,15 +114,23 @@ class ModelManager(private val context: Context) {
             }
             stage.deleteRecursively()
 
-            // One model at a time: remove other catalog dirs + legacy dir.
+            // Verify the NEW install BEFORE touching the old one — a failed
+            // download must never leave the user without a working model.
+            val newOk = KokoroEngine.chooseModelFile(target, preferInt8 = true) != null &&
+                File(target, "tokens.txt").isFile()
+            check(newOk) {
+                "Extraction finished but no usable model files were found — " +
+                    "your previous model is untouched."
+            }
+
+            // Verified: now enforce one-model-at-a-time.
             CATALOG.filter { it.id != option.id }.forEach { other ->
                 File(modelsRoot, other.id).deleteRecursively()
             }
             if (option.id != "kokoro") File(modelsRoot, "kokoro").deleteRecursively()
 
-            val detected = detect()
-            check(detected.ready) { "Extraction finished but no usable model files were found" }
-            update { detected.copy(phaseLabel = "Ready") }
+            update { it.copy(phaseLabel = "Ready") }
+            update { detect() }
         } catch (t: Throwable) {
             update { it.copy(downloading = false, error = t.message ?: t.javaClass.simpleName, phaseLabel = "") }
         }
