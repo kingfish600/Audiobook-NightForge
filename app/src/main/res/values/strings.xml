@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Audiobook Forge</string>
+    <string name="app_name">Audiobook NightForge</string>
     <string name="notif_channel_conversion">Conversion</string>
     <string name="notif_channel_conversion_desc">Progress of audiobook rendering</string>
 </resources>

@@ -87,7 +87,7 @@ class ConversionWorker(
         // Hold the CPU on through Doze/screen-off — OEM throttling otherwise
         // stretches chunk times by 3-4x and an overnight render stalls.
         val wakeLock = (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Forge:render")
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NightForge:render")
         wakeLock.setReferenceCounted(false)
         wakeLock.acquire(MAX_WAKE_MS)
 

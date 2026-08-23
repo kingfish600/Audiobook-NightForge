@@ -166,7 +166,7 @@ class ModelManager(private val context: Context) {
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "AudiobookForge/0.1")
+        conn.setRequestProperty("User-Agent", "AudiobookNightForge/0.1")
         conn.connect()
         check(conn.responseCode in 200..299) { "HTTP ${conn.responseCode} downloading model" }
         val total = conn.contentLengthLong

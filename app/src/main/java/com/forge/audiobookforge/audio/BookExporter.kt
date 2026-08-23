@@ -11,7 +11,7 @@ import java.io.File
 /**
  * Copies rendered chapters somewhere other players can reach them.
  *  - Default: public music collection via MediaStore
- *    (Music/AudiobookForge/<Book Title>/NNN - <Chapter>.m4a|.ogg)
+ *    (Music/Audiobook NightForge/<Book Title>/NNN - <Chapter>.m4a|.ogg)
  *  - Optional: a user-chosen folder (SAF document tree) picked in Settings.
  * No storage permission needed on API 29+ for either path.
  */
@@ -29,7 +29,7 @@ object BookExporter {
 
     private fun exportToMediaStore(book: Book, audioDir: File, context: Context): Int {
         val resolver = context.contentResolver
-        val relDir = "Music/AudiobookForge/${sanitize(book.title)}"
+        val relDir = "Music/Audiobook NightForge/${sanitize(book.title)}"
         var exported = 0
         for (chapter in book.chapters) {
             val src = chapter.audioFile?.let { File(audioDir, it) } ?: continue

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Audiobook Forge's own code is MIT-licensed (see `LICENSE`). It builds on these
+Audiobook NightForge's own code is MIT-licensed (see `LICENSE`). It builds on these
 graciously open-source projects:
 
 | Component | License | Use |
