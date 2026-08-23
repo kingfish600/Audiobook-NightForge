@@ -171,11 +171,21 @@ fun SettingsScreen() {
                         onClick = { container.settings.setCodec("opus") },
                         label = { Text("Opus · .ogg") },
                     )
+                    Spacer(Modifier.padding(start = 8.dp))
+                    androidx.compose.material3.FilterChip(
+                        selected = codec == "wav",
+                        onClick = { container.settings.setCodec("wav") },
+                        label = { Text("WAV · lossless") },
+                    )
                 }
                 Text(
-                    if (codec == "opus") "Opus: smaller files, great quality; supported by modern players. " +
-                        "Non-standard sample rates are resampled automatically. Applies to future renders."
-                    else "AAC (.m4a): plays everywhere. Applies to future renders.",
+                    when (codec) {
+                        "opus" -> "Opus: smaller files, great quality; supported by modern players. " +
+                            "Non-standard sample rates are resampled automatically. Applies to future renders."
+                        "wav" -> "WAV: uncompressed — maximum fidelity, enormous files. Best reserved for " +
+                            "short content where quality matters more than storage."
+                        else -> "AAC (.m4a): plays everywhere. Applies to future renders."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

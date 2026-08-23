@@ -93,10 +93,15 @@ class ConversionWorker(
 
         var failed = false
         try {
-            val useOpus = settings.codec.value == "opus"
+            val codec = settings.codec.value
+            val useOpus = codec == "opus"
             val engineRate = engine.sampleRate()
             val sampleRate = if (useOpus) com.forge.audiobookforge.audio.AudioOps.opusSafeRate(engineRate) else engineRate
-            val outExt = if (useOpus) "ogg" else "m4a"
+            val outExt = when (codec) {
+                "opus" -> "ogg"
+                "wav" -> "wav"
+                else -> "m4a"
+            }
             log("rendering ${if (useOpus) "opus" else "aac"} at ${sampleRate}Hz (engine native ${engineRate}Hz)")
             for (ch in book.chapters) {
                 if (controller.cancelRequested) break
@@ -156,7 +161,10 @@ class ConversionWorker(
         val rtfWindow = ArrayDeque<Float>()
 
         outFile.delete()
-        val writer = if (useOpus) {
+        val wavMode = outExt == "wav"
+        val wavOut = if (wavMode) com.forge.audiobookforge.audio.Wav.openStream(outFile, sampleRate) else null
+        var wavSamples = 0L
+        val writer = if (wavMode) null else if (useOpus) {
             AacChapterWriter(
                 outFile, sampleRate = sampleRate,
                 mimeType = android.media.MediaFormat.MIMETYPE_AUDIO_OPUS,
@@ -173,7 +181,10 @@ class ConversionWorker(
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)
                 } else audio.samples
-                writer.writePcm(pcm)
+                if (writer != null) writer.writePcm(pcm) else {
+                    com.forge.audiobookforge.audio.Wav.append(wavOut!!, pcm)
+                    wavSamples += pcm.size
+                }
 
                 val synthSec = (System.nanoTime() - t0) / 1e9
                 val audioSec = audio.samples.size.toDouble() / audio.sampleRate
@@ -220,14 +231,22 @@ class ConversionWorker(
             } else {
                 ChapterStatus.FAILED
             }
-            runCatching { writer.close() }
+            runCatching {
+                writer?.close() ?: wavOut?.let { com.forge.audiobookforge.audio.Wav.finish(it) }
+            }
             outFile.delete()
             repo.save(book)
             throw t
         }
-        ch.durationMs = writer.durationMs()
-        ch.audioFile = outFile.name
-        writer.close()
+        if (writer != null) {
+            ch.durationMs = writer.durationMs()
+            ch.audioFile = outFile.name
+            writer.close()
+        } else {
+            com.forge.audiobookforge.audio.Wav.finish(wavOut!!)
+            ch.durationMs = wavSamples * 1_000L / sampleRate
+            ch.audioFile = outFile.name
+        }
     }
 
     private fun estimateEtaMinutes(

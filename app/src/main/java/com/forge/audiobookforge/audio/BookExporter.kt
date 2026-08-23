@@ -112,7 +112,7 @@ object BookExporter {
         "%03d - %s.%s".format(index + 1, sanitize(title), src.extension)
 
     private fun mimeFor(fileName: String): String =
-        if (fileName.endsWith(".ogg", true)) "audio/ogg" else "audio/mp4"
+        when { fileName.endsWith(".ogg", true) -> "audio/ogg"; fileName.endsWith(".wav", true) -> "audio/wav"; else -> "audio/mp4" }
 
     private fun sanitize(name: String): String =
         name.replace(Regex("[^A-Za-z0-9 ()'._-]"), "_").trim().take(64).ifEmpty { "book" }
