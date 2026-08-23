@@ -109,8 +109,14 @@ class PlayerController(
 
     private var previewPlayer: android.media.MediaPlayer? = null
 
-    fun playPreview(file: java.io.File) {
-        stopPreview()
+    /** Halt audiobook playback entirely (used when its book is deleted). */
+    fun stopAll() {
+        player.stop()
+        player.clearMediaItems()
+        _ui.value = PlayerUi(visible = false)
+    }
+
+    fun playPreview(file: java.io.File) {        stopPreview()
         previewPlayer = android.media.MediaPlayer().apply {
             setDataSource(file.absolutePath)
             prepare()

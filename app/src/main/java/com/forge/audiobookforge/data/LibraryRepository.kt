@@ -46,8 +46,26 @@ class LibraryRepository(private val context: Context) {
 
     fun audioDir(bookId: String): File = File(dirFor(bookId), "audio")
 
+    /**
+     * Removes the book entirely: source file, rendered chapters, and database
+     * record. A tombstone marker blocks any late writes from a worker that is
+     * still tearing down; call [deleteBook] again after ~2 s to sweep anything
+     * the dying worker managed to recreate.
+     */
+    @Synchronized
+    fun deleteBook(bookId: String) {
+        runCatching { tombstoneFile(bookId).createNewFile() }
+        dirFor(bookId).deleteRecursively()
+        reload()
+    }
+
+    private fun tombstoneFile(bookId: String): File = File(root, ".$bookId.deleted")
+
     @Synchronized
     fun save(book: Book) {
+        // A book pending deletion must never be resurrected by a dying worker's
+        // final progress write.
+        if (tombstoneFile(book.id).exists()) return
         val dir = dirFor(book.id).apply { mkdirs() }
         File(dir, "book.json").writeText(json.encodeToString(Book.serializer(), book))
         _books.value = _books.value.toList() // poke observers

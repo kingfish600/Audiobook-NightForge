@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,10 +47,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun LibraryScreen(onOpenBook: (String) -> Unit) {
     val container = LocalAppContainer.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val books by container.library.books.collectAsState()
     val modelUi by container.models.ui.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var pendingDelete by remember { androidx.compose.runtime.mutableStateOf<com.forge.audiobookforge.data.model.Book?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -102,10 +107,49 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
             }
 
             items(books, key = { it.id }) { book ->
-                BookCard(book) { onOpenBook(book.id) }
+                BookCard(
+                    book,
+                    onClick = { onOpenBook(book.id) },
+                    onDelete = { pendingDelete = book },
+                )
             }
             item { Spacer(Modifier.height(90.dp)) }
         }
+    }
+
+    pendingDelete?.let { doomed ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete this book?") },
+            text = {
+                Text("“${doomed.title}” and all of its rendered audio will be permanently removed from the device.")
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    val book = doomed
+                    pendingDelete = null
+                    scope.launch {
+                        // Cancel any active render first, then delete. A tombstone
+                        // marker blocks late writes from the dying worker, and a
+                        // delayed sweep catches anything it recreated mid-teardown.
+                        androidx.work.WorkManager.getInstance(context)
+                            .cancelUniqueWork("convert_${book.id}")
+                        val st = container.conversion.state.value
+                        if (st is com.forge.audiobookforge.conversion.ConversionState.Running && st.bookId == book.id) {
+                            container.conversion.markUiStopped()
+                        }
+                        if (container.player.ui.value.bookId == book.id) container.player.stopAll()
+                        container.library.deleteBook(book.id)
+                        kotlinx.coroutines.delay(2_000)          // let the worker finish dying…
+                        container.library.deleteBook(book.id)    // …then sweep any zombie files
+                        snackbar.showSnackbar("Deleted “${book.title}”")
+                    }
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
     }
 }
 
@@ -186,24 +230,33 @@ private fun ModelBanner() {
 }
 
 @Composable
-private fun BookCard(book: Book, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Column(Modifier.padding(14.dp)) {
-            Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-            if (book.author.isNotBlank()) {
-                Text(book.author, style = MaterialTheme.typography.bodySmall)
+private fun BookCard(book: Book, onClick: () -> Unit, onDelete: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                if (book.author.isNotBlank()) {
+                    Text(book.author, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(
+                        progress = { if (book.chapters.isEmpty()) 0f else book.doneCount.toFloat() / book.chapters.size },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        " ${book.doneCount}/${book.chapters.size}",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LinearProgressIndicator(
-                    progress = { if (book.chapters.isEmpty()) 0f else book.doneCount.toFloat() / book.chapters.size },
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    " ${book.doneCount}/${book.chapters.size}",
-                    style = MaterialTheme.typography.labelMedium,
-                )
+            androidx.compose.material3.IconButton(onClick = onDelete) {
+                Icon(Icons.Filled.Delete, contentDescription = "Delete book", tint = MaterialTheme.colorScheme.error)
             }
+            Spacer(Modifier.width(6.dp))
         }
     }
 }
