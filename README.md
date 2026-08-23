@@ -53,6 +53,8 @@ pulled from k2-fsa's release assets, stored in app-private storage, fully offlin
 - Per-chapter parallelism / NNAPI execution provider experiments
 - Export/share rendered books to other audiobook players
 
+**Won't fix:** MOBI/AZW3 input — proprietary, declining format; convert to EPUB once with Calibre instead (Amazon itself dropped MOBI uploads in 2022). DRM-protected files are out of scope permanently.
+
 ## License
 
 Apache-2.0. Kokoro model weights: Apache-2.0 (hexgrad/kokoro). sherpa-onnx: Apache-2.0.
