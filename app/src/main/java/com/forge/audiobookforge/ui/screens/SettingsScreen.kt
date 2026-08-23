@@ -141,7 +141,7 @@ fun SettingsScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = charging, onCheckedChange = { container.settings.setRequireCharging(it) })
                     Spacer(Modifier.padding(start = 8.dp))
-                    Text("Render only while charging (default)")
+                    Text("Render only while charging (pauses when unplugged)")
                 }
 
                 Spacer(Modifier.height(10.dp))
