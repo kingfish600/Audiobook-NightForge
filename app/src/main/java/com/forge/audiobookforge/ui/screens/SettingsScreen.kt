@@ -161,15 +161,15 @@ fun SettingsScreen() {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.FilterChip(
-                        selected = codec == "aac",
-                        onClick = { container.settings.setCodec("aac") },
-                        label = { Text("AAC · .m4a") },
-                    )
-                    Spacer(Modifier.padding(start = 8.dp))
-                    androidx.compose.material3.FilterChip(
                         selected = codec == "opus",
                         onClick = { container.settings.setCodec("opus") },
                         label = { Text("Opus · .ogg") },
+                    )
+                    Spacer(Modifier.padding(start = 8.dp))
+                    androidx.compose.material3.FilterChip(
+                        selected = codec == "aac",
+                        onClick = { container.settings.setCodec("aac") },
+                        label = { Text("AAC · .m4a") },
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(

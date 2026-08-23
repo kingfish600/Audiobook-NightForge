@@ -24,7 +24,7 @@ class AppSettings(context: Context) {
     private val _segmentChars = MutableStateFlow(prefs.getInt(KEY_SEGMENT, 280))
     val segmentChars: StateFlow<Int> = _segmentChars.asStateFlow()
 
-    private val _codec = MutableStateFlow(prefs.getString(KEY_CODEC, "aac") ?: "aac")
+    private val _codec = MutableStateFlow(prefs.getString(KEY_CODEC, "opus") ?: "opus")
     val codec: StateFlow<String> = _codec.asStateFlow()
 
     private val _exportTreeUri = MutableStateFlow(prefs.getString(KEY_EXPORT_TREE, null))
