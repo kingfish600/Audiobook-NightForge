@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,17 +16,50 @@ android {
         applicationId = "com.forge.audiobookforge"
         minSdk = 29
         targetSdk = 34
-        versionCode = 37
-        versionName = "0.3.2"
+        versionCode = 38
+        versionName = "0.3.3"
 
         // RedMagic 10S Pro and effectively all modern devices are arm64.
         // Add "x86_64" here if you want emulator support (requires matching .so files).
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
+    // Release signing: prefer keystore.properties (storeFile/storePassword/
+    // keyAlias/keyPassword). Fallback reuses the auto-generated debug keystore so
+    // a signed release updates over existing sideloaded builds seamlessly.
+    val ksProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) } else {
+            val dbg = File(
+                System.getenv("ANDROID_USER_HOME")
+                    ?: "/home/kingfish600/workspace/tools/gradle-home/android-user",
+                "debug.keystore",
+            )
+            if (dbg.isFile) {
+                setProperty("storeFile", dbg.absolutePath)
+                setProperty("storePassword", "android")
+                setProperty("keyAlias", "androiddebugkey")
+                setProperty("keyPassword", "android")
+            }
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            ksProps.getProperty("storeFile")?.let {
+                storeFile = file(it)
+                storePassword = ksProps.getProperty("storePassword")
+                keyAlias = ksProps.getProperty("keyAlias")
+                keyPassword = ksProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
