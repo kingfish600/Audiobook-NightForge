@@ -163,7 +163,7 @@ fun BookDetailScreen(bookId: String?) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Render only while charging",
+                            "Forge only while charging",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
