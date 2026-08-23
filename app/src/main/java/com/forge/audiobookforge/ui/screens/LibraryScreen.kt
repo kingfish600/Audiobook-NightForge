@@ -165,15 +165,22 @@ private fun ModelBanner() {
             Spacer(Modifier.height(10.dp))
             Button(
                 enabled = !modelUi.downloading,
-                onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[0]) } },
+                onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[1]) } },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Download voice model · ≈126 MB") }
+            ) { Text("Recommended: Kokoro full precision · ≈440 MB") }
             Spacer(Modifier.height(6.dp))
             OutlinedButton(
                 enabled = !modelUi.downloading,
                 onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[2]) } },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Lite version for modest phones · ≈30 MB") }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Both sound great — full precision renders fastest on modern flagship chips; " +
+                    "the smaller int8 variant lives in Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

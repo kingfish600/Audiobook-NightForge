@@ -18,7 +18,7 @@ class AppSettings(context: Context) {
     private val _preferInt8 = MutableStateFlow(prefs.getBoolean(KEY_INT8, true))
     val preferInt8: StateFlow<Boolean> = _preferInt8.asStateFlow()
 
-    private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, true))
+    private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, false))
     val requireCharging: StateFlow<Boolean> = _requireCharging.asStateFlow()
 
     private val _segmentChars = MutableStateFlow(prefs.getInt(KEY_SEGMENT, 280))

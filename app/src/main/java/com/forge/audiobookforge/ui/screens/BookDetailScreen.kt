@@ -271,9 +271,9 @@ fun BookDetailScreen(bookId: String?) {
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 enabled = !modelUi.downloading,
-                                onClick = { snackbarScope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[0]) } },
+                                onClick = { snackbarScope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[1]) } },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Download voice model (≈126 MB)") }
+                            ) { Text("Download voice model (≈440 MB)") }
                             if (modelUi.downloading) {
                                 Spacer(Modifier.height(6.dp))
                                 if (modelUi.indeterminate) {
