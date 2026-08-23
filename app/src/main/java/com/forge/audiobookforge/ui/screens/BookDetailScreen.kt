@@ -144,7 +144,22 @@ fun BookDetailScreen(bookId: String?) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = settings,
-                            onCheckedChange = { container.settings.setRequireCharging(it) },
+                            onCheckedChange = { v ->
+                                container.settings.setRequireCharging(v)
+                                // Apply immediately: if THIS book is rendering right now,
+                                // restart its job under the new constraint. Finished
+                                // chapters are kept; only the in-flight chapter redoes.
+                                val st = conversion
+                                if (st is ConversionState.Running && st.bookId == book.id) {
+                                    ConversionWorker.enqueue(context, book.id, requireCharging = v)
+                                    snackbarScope.launch {
+                                        snackbar.showSnackbar(
+                                            if (v) "Resuming under charging-only — will pause when unplugged"
+                                            else "Resuming without the charging requirement"
+                                        )
+                                    }
+                                }
+                            },
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
