@@ -175,7 +175,14 @@ class ConversionWorker(
                 }
             }
         } catch (t: Throwable) {
-            ch.status = if (controller.cancelRequested) ChapterStatus.PENDING else ChapterStatus.FAILED
+            // User stop OR system stop (constraint lost, app swiped away):
+            // leave the chapter pending so resume picks it up cleanly. Only a
+            // genuine synthesis error deserves the FAILED badge.
+            ch.status = if (controller.cancelRequested || isStopped) {
+                ChapterStatus.PENDING
+            } else {
+                ChapterStatus.FAILED
+            }
             runCatching { writer.close() }
             outFile.delete()
             repo.save(book)
