@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -251,15 +252,36 @@ fun SettingsScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
+        val crashCtx = LocalContext.current
+        val crashFile = remember { com.forge.audiobookforge.CrashRecorder.lastCrashFile(crashCtx) }
+        if (crashFile != null) {
+            OutlinedButton(onClick = {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Audiobook NightForge crash report")
+                    putExtra(android.content.Intent.EXTRA_TEXT, runCatching { crashFile.readText() }.getOrDefault(""))
+                }
+                runCatching {
+                    crashCtx.startActivity(
+                        android.content.Intent.createChooser(send, "Share crash report")
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }) {
+                Text("Share crash report", color = MaterialTheme.colorScheme.error)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         OutlinedButton(onClick = { container.kokoroEngine.release() }) {
             Text("Unload engine from memory")
         }
 
         Spacer(Modifier.height(24.dp))
         Text(
-            "Audiobook Forge ${com.forge.audiobookforge.BuildConfig.VERSION_NAME} — renders EPUB/TXT books to .m4a " +
-                "chapters fully offline using Kokoro-82M via sherpa-onnx. Rendering runs as background work and can be " +
-                "restricted to charging state so it never touches your battery.",
+            "Audiobook NightForge ${com.forge.audiobookforge.BuildConfig.VERSION_NAME} — forges EPUB/TXT/PDF books into " +
+                ".ogg/.m4a/.wav chapters fully offline using Kokoro-82M via sherpa-onnx. Forging runs as background work " +
+                "and can be restricted to charging state so it never touches your battery.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

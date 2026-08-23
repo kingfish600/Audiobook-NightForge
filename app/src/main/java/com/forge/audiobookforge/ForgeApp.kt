@@ -10,6 +10,7 @@ class ForgeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
+        com.forge.audiobookforge.CrashRecorder.install(this)
         container = AppContainer(this)
     }
 }
