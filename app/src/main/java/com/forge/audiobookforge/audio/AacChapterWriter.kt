@@ -70,12 +70,16 @@ class AacChapterWriter(
     }
 
     private fun drain(endOfStream: Boolean) {
+        var eosWaits = 0
         while (true) {
             val outIdx = codec.dequeueOutputBuffer(bufferInfo, if (endOfStream) 10_000 else 0)
             when {
                 outIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                     if (!endOfStream) return
-                    continue // keep waiting for the EOS-flagged buffer
+                    // Safety valve: a well-behaved encoder answers EOS within ms;
+                    // never spin longer than ~5 s regardless of codec quirks.
+                    if (++eosWaits > 500) return
+                    continue
                 }
                 outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     trackIndex = muxer.addTrack(codec.outputFormat)
@@ -101,10 +105,28 @@ class AacChapterWriter(
 
     override fun close() {
         try {
-            drain(endOfStream = true)
+            // Submit END_OF_STREAM on the INPUT side first. Without this the
+            // encoder never produces its EOS output buffer, and draining below
+            // would spin forever — freezing every chapter at 100% with no
+            // checkmark (cold phone, no CPU, no error).
+            val deadline = System.currentTimeMillis() + 5_000
+            var eosQueued = false
+            while (!eosQueued && System.currentTimeMillis() < deadline) {
+                val idx = codec.dequeueInputBuffer(10_000)
+                if (idx >= 0) {
+                    codec.getInputBuffer(idx)?.clear()
+                    codec.queueInputBuffer(idx, 0, 0, nextPtsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    eosQueued = true
+                }
+            }
+            if (eosQueued) {
+                drain(endOfStream = true)
+            } else {
+                android.util.Log.w("ForgeWorker", "AAC encoder refused EOS within 5 s — finalizing anyway")
+            }
             runCatching { codec.stop() }
             codec.release()
-            if (muxerStarted) muxer.stop()
+            if (muxerStarted) runCatching { muxer.stop() }
         } finally {
             muxer.release()
         }
