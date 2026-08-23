@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -83,6 +84,13 @@ class ConversionWorker(
         setForeground(createForegroundInfo(book.title, 0f, "Starting…"))
         postProgress(applicationContext, book.title, 0f, "Preparing…")
 
+        // Hold the CPU on through Doze/screen-off — OEM throttling otherwise
+        // stretches chunk times by 3-4x and an overnight render stalls.
+        val wakeLock = (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Forge:render")
+        wakeLock.setReferenceCounted(false)
+        wakeLock.acquire(MAX_WAKE_MS)
+
         var failed = false
         try {
             val sampleRate = engine.sampleRate()
@@ -94,16 +102,22 @@ class ConversionWorker(
                 renderChapter(engine, repo, controller, book, ch, sampleRate, settings.segmentChars.value)
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
+                val doneFile = File(repo.audioDir(bookId), "%03d.m4a".format(ch.index))
+                log(
+                    "chapter ${ch.index} DONE: '${ch.title}' duration=${ch.durationMs}ms " +
+                        "file=${doneFile.name} bytes=${doneFile.length()}"
+                )
             }
         } catch (_: kotlinx.coroutines.CancellationException) {
             // WorkManager cancelled us: state already saved per chapter, treat as graceful stop
-            log("cancelled by user")
+            log("cancelled (user stop or system stop)")
         } catch (t: Throwable) {
             failed = true
             log("render failed: ${t.message ?: t.javaClass.simpleName}")
             controller.fail(t.message ?: t.javaClass.simpleName, book.id)
             postProgress(applicationContext, book.title, 0f, "Error: ${t.message ?: t.javaClass.simpleName}")
         } finally {
+            runCatching { if (wakeLock.isHeld) wakeLock.release() }
             engine.release()
             controller.endRun(runId)
             NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_ID)
@@ -209,7 +223,7 @@ class ConversionWorker(
     private fun createForegroundInfo(title: String, progress: Float, text: String): ForegroundInfo {
         val notification = buildNotification(title, progress, text)
         return if (Build.VERSION.SDK_INT >= 29) {
-            ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             @Suppress("DEPRECATION")
             ForegroundInfo(NOTIFICATION_ID, notification)
@@ -240,6 +254,9 @@ class ConversionWorker(
         const val CHANNEL_ID = "conversion"
         const val NOTIFICATION_ID = 42
         const val CHUNK_MAX_LEN = 280
+
+        /** 12 h ceiling; renders should finish or be stopped long before this. */
+        const val MAX_WAKE_MS = 12L * 60 * 60 * 1000
 
         private fun log(msg: String) = android.util.Log.i("ForgeWorker", msg)
 

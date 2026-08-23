@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.forge.audiobookforge.di.LocalAppContainer
 import kotlinx.coroutines.launch
@@ -141,6 +142,29 @@ fun SettingsScreen() {
                     Switch(checked = charging, onCheckedChange = { container.settings.setRequireCharging(it) })
                     Spacer(Modifier.padding(start = 8.dp))
                     Text("Render only while charging (default)")
+                }
+
+                Spacer(Modifier.height(10.dp))
+                val ctx = LocalContext.current
+                val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+                val exempt = pm.isIgnoringBatteryOptimizations(ctx.packageName)
+                Text(
+                    if (exempt) "Battery optimization: exempt ✓ — background renders keep full speed"
+                    else "Battery optimization: ACTIVE — Android may throttle overnight renders heavily",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (exempt) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+                if (!exempt) {
+                    TextButton(onClick = {
+                        runCatching {
+                            ctx.startActivity(
+                                android.content.Intent(
+                                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                    android.net.Uri.parse("package:${ctx.packageName}"),
+                                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }) { Text("Allow unrestricted background rendering…") }
                 }
             }
         }
