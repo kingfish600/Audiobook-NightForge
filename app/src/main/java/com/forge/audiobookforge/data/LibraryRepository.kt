@@ -94,11 +94,18 @@ class LibraryRepository(private val context: Context) {
                 val buf = ByteArray(4); val n = input.read(buf); buf.copyOf(n)
             }
             val looksEpub = head.size >= 2 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() // "PK" zip magic
+            val looksPdf = head.size >= 4 && head[0] == '%'.code.toByte() &&
+                head[1] == 'P'.code.toByte() && head[2] == 'D'.code.toByte() && head[3] == 'F'.code.toByte()
             val nameExt = display_name.substringAfterLast('.', "").lowercase()
             val ext = when (nameExt) {
                 "epub" -> "epub"
                 "txt", "text" -> "txt"
-                else -> if (looksEpub) "epub" else "txt"
+                "pdf" -> "pdf"
+                else -> when {
+                    looksEpub -> "epub"
+                    looksPdf -> "pdf"
+                    else -> "txt"
+                }
             }
             val sourceFile = File(dir, "source.$ext")
             if (!download.renameTo(sourceFile)) {
@@ -108,6 +115,7 @@ class LibraryRepository(private val context: Context) {
 
             val parsed = when (ext) {
                 "epub" -> EpubParser.parse(sourceFile.inputStream())
+                "pdf" -> com.forge.audiobookforge.data.parser.PdfParser.parse(sourceFile)
                 else -> TxtParser.parse(sourceFile)
             }
 

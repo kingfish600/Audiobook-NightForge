@@ -1,6 +1,6 @@
 # Audiobook NightForge
 
-Convert EPUB/TXT ebooks into audiobooks **fully offline, on your phone** — no server,
+Convert EPUB/TXT/PDF ebooks into audiobooks **fully offline, on your phone** — no server,
 no cloud, no Termux. Renders each chapter with the Kokoro-82M neural TTS model
 (multilingual, dozens of voices) running on-device via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).
 
@@ -9,7 +9,7 @@ stutters; rendering while charging eliminates both.*
 
 ## How it works
 
-1. **Import** an EPUB or TXT (system file picker — EPUB is parsed natively: ZIP → OPF → spine → XHTML text).
+1. **Import** an EPUB, TXT, or PDF (system file picker — EPUB parsed natively; PDFs must be born-digital text, not scans).
 2. Pick a **voice** (curated Kokoro voice list) and **speed**.
 3. Hit **Render**. Background work (WorkManager) synthesizes chapter-by-chapter:
    - one persistent sherpa-onnx session (no per-sentence re-init),
@@ -43,7 +43,7 @@ pulled from k2-fsa's release assets, stored in app-private storage, fully offlin
 - **sherpa-onnx v1.13.6**: prebuilt `arm64-v8a` JNI libs vendored under `app/src/main/jniLibs/`,
   Kotlin API wrapper vendored under `com.k2fsa.sherpa.onnx`.
 - **No third-party runtime deps** beyond AndroidX/Media3/WorkManager/kotlinx +
-  commons-compress (tar.bz2 extraction). EPUB/TXT parsing is hand-rolled and unit-tested.
+  commons-compress (tar.bz2 extraction). EPUB/TXT/PDF parsing is hand-rolled and unit-tested.
 - Voice ids map to Kokoro's alphabetical `voices.bin` ordering (see `Voices.kt`).
 
 ## Measured performance (Snapdragon 8 Elite, fan-cooled, plugged in)

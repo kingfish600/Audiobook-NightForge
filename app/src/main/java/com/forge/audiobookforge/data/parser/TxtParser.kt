@@ -15,7 +15,16 @@ object TxtParser {
     fun parse(file: File): EpubParser.ParsedBook {
         var text = file.readText(Charsets.UTF_8)
         if (text.startsWith("\uFEFF")) text = text.removePrefix("\uFEFF")
+        val chapters = detectChapters(text)
+        // Internal storage names are meaningless ("source"); let the caller fall
+        // back to whatever the file picker reported instead.
+        val derivedTitle = sequenceOf(file.nameWithoutExtension, file.name)
+            .firstOrNull { it.isNotBlank() && it != "source" && it != "download" && !it.startsWith("source.") }
+        return EpubParser.ParsedBook(derivedTitle, null, chapters)
+    }
 
+    /** Shared with [PdfParser]: heading heuristics, falling back to ~4k-char parts. */
+    fun detectChapters(text: String): List<EpubParser.ParsedChapter> {
         val lines = text.lines()
         val headingIdx = ArrayList<Pair<Int, String>>() // line index, title
         lines.forEachIndexed { i, line ->
@@ -41,11 +50,7 @@ object TxtParser {
                 .mapIndexed { i, c -> EpubParser.ParsedChapter("Part ${i + 1}", c) }
         }.filter { it.text.isNotBlank() }
 
-        require(chapters.isNotEmpty()) { "Text file produced no readable content" }
-        // Internal storage names are meaningless ("source"); let the caller fall
-        // back to whatever the file picker reported instead.
-        val derivedTitle = sequenceOf(file.nameWithoutExtension, file.name)
-            .firstOrNull { it.isNotBlank() && it != "source" && it != "download" && !it.startsWith("source.") }
-        return EpubParser.ParsedBook(derivedTitle, null, chapters)
+        require(chapters.isNotEmpty()) { "Text produced no readable content" }
+        return chapters
     }
 }

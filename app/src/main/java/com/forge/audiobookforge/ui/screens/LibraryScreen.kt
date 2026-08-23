@@ -72,7 +72,7 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    importLauncher.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream"))
+                    importLauncher.launch(arrayOf("application/epub+zip", "text/plain", "application/pdf", "application/octet-stream"))
                 },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("Import EPUB / TXT") },
@@ -98,7 +98,7 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
                         Text("No books yet", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Import an EPUB or TXT file, then forge it into an audiobook\nright on this phone — no internet needed after setup.",
+                            "Import an EPUB, TXT, or PDF file, then forge it into an audiobook\nright on this phone — no internet needed after setup.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

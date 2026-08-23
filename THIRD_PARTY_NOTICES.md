@@ -11,6 +11,7 @@ graciously open-source projects:
 | AndroidX / Jetpack Compose / Media3 / WorkManager | Apache-2.0 | App framework |
 | kotlinx.serialization / coroutines | Apache-2.0 | Serialization & concurrency |
 | commons-compress | Apache-2.0 | tar.bz2 extraction of model bundles |
+| [pdfbox-android](https://github.com/TomRoush/PdfBox-Android) | Apache-2.0 | PDF text extraction |
 
 Model bundles are downloaded at runtime directly from the
 [k2-fsa sherpa-onnx release assets](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models)
