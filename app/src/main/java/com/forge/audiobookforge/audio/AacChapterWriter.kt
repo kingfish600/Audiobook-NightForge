@@ -10,19 +10,22 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Streams float PCM into an AAC-LC encoded .m4a file (one file per chapter).
+ * Streams float PCM into an encoded audio file (one file per chapter).
+ * Defaults to AAC-LC in .m4a; Opus in Ogg is available on API 29+.
  * Uses only platform APIs — no ffmpeg dependency.
  */
 class AacChapterWriter(
     outFile: File,
     private val sampleRate: Int = 24_000,
     bitRate: Int = 64_000,
+    mimeType: String = MediaFormat.MIMETYPE_AUDIO_AAC,
+    muxerFormat: Int = MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
 ) : Closeable {
 
-    private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC).apply {
+    private val codec: MediaCodec = MediaCodec.createEncoderByType(mimeType).apply {
         configure(
             MediaFormat().apply {
-                setString(MediaFormat.KEY_MIME, MediaFormat.MIMETYPE_AUDIO_AAC)
+                setString(MediaFormat.KEY_MIME, mimeType)
                 setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
                 setInteger(MediaFormat.KEY_SAMPLE_RATE, sampleRate)
                 setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1)
@@ -34,7 +37,7 @@ class AacChapterWriter(
         start()
     }
 
-    private val muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    private val muxer = MediaMuxer(outFile.absolutePath, muxerFormat)
 
     private var trackIndex = -1
     private var muxerStarted = false

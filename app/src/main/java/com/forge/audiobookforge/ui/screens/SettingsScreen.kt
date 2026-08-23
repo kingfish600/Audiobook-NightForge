@@ -155,6 +155,65 @@ fun SettingsScreen() {
                     Text("Render only while charging (pauses when unplugged)")
                 }
 
+                Spacer(Modifier.height(12.dp))
+                val codec by container.settings.codec.collectAsState()
+                Text("Audio format", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.FilterChip(
+                        selected = codec == "aac",
+                        onClick = { container.settings.setCodec("aac") },
+                        label = { Text("AAC · .m4a") },
+                    )
+                    Spacer(Modifier.padding(start = 8.dp))
+                    androidx.compose.material3.FilterChip(
+                        selected = codec == "opus",
+                        onClick = { container.settings.setCodec("opus") },
+                        label = { Text("Opus · .ogg") },
+                    )
+                }
+                Text(
+                    if (codec == "opus") "Opus: smaller files, great quality; supported by modern players. " +
+                        "Non-standard sample rates are resampled automatically. Applies to future renders."
+                    else "AAC (.m4a): plays everywhere. Applies to future renders.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(12.dp))
+                val exportTree by container.settings.exportTreeUri.collectAsState()
+                Text("Export folder", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                val folderPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
+                ) { uri ->
+                    if (uri != null) {
+                        runCatching {
+                            ctx.contentResolver.takePersistableUriPermission(
+                                uri,
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                            )
+                        }
+                        container.settings.setExportTreeUri(uri.toString())
+                    }
+                }
+                Text(
+                    exportTree?.let { "Custom folder selected (chapters land in a sub-folder per book)." }
+                        ?: "Default: Music/AudiobookForge in the shared music library.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row {
+                    OutlinedButton(onClick = { folderPicker.launch(null) }) {
+                        Text(if (exportTree == null) "Choose a custom folder…" else "Change folder…")
+                    }
+                    if (exportTree != null) {
+                        Spacer(Modifier.padding(start = 8.dp))
+                        TextButton(onClick = { container.settings.setExportTreeUri(null) }) { Text("Use default") }
+                    }
+                }
+
                 Spacer(Modifier.height(10.dp))
                 val ctx = LocalContext.current
                 val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager

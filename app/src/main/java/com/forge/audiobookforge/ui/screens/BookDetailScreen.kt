@@ -251,10 +251,11 @@ fun BookDetailScreen(bookId: String?) {
                                                     book,
                                                     container.library.audioDir(book.id),
                                                     context,
+                                                    container.settings.exportTreeUri.value,
                                                 )
                                             }
                                             snackbar.showSnackbar(
-                                                if (count > 0) "Exported $count chapter(s) to Music/AudiobookForge/"
+                                                if (count > 0) "Exported $count chapter(s)"
                                                 else "Nothing exported — no finished chapter files found"
                                             )
                                         }

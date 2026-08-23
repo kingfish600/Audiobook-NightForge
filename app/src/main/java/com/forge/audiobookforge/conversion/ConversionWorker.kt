@@ -93,16 +93,20 @@ class ConversionWorker(
 
         var failed = false
         try {
-            val sampleRate = engine.sampleRate()
+            val useOpus = settings.codec.value == "opus"
+            val engineRate = engine.sampleRate()
+            val sampleRate = if (useOpus) com.forge.audiobookforge.audio.AudioOps.opusSafeRate(engineRate) else engineRate
+            val outExt = if (useOpus) "ogg" else "m4a"
+            log("rendering ${if (useOpus) "opus" else "aac"} at ${sampleRate}Hz (engine native ${engineRate}Hz)")
             for (ch in book.chapters) {
                 if (controller.cancelRequested) break
                 val existing = ch.audioFile?.let { File(repo.audioDir(bookId), it) }
                 if (ch.status == ChapterStatus.DONE && existing != null && existing.isFile) continue
 
-                renderChapter(engine, repo, controller, book, ch, sampleRate, settings.segmentChars.value)
+                renderChapter(engine, repo, controller, book, ch, sampleRate, settings.segmentChars.value, useOpus, outExt)
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
-                val doneFile = File(repo.audioDir(bookId), "%03d.m4a".format(ch.index))
+                val doneFile = File(repo.audioDir(bookId), "%03d.$outExt".format(ch.index))
                 log(
                     "chapter ${ch.index} DONE: '${ch.title}' duration=${ch.durationMs}ms " +
                         "file=${doneFile.name} bytes=${doneFile.length()}"
@@ -133,9 +137,11 @@ class ConversionWorker(
         ch: Chapter,
         sampleRate: Int,
         segmentLen: Int,
+        useOpus: Boolean = false,
+        outExt: String = "m4a",
     ) {
         val audioDir = repo.audioDir(book.id).apply { mkdirs() }
-        val outFile = File(audioDir, "%03d.m4a".format(ch.index))
+        val outFile = File(audioDir, "%03d.$outExt".format(ch.index))
         ch.status = ChapterStatus.RENDERING
         repo.save(book)
 
@@ -150,13 +156,24 @@ class ConversionWorker(
         val rtfWindow = ArrayDeque<Float>()
 
         outFile.delete()
-        val writer = AacChapterWriter(outFile, sampleRate = sampleRate)
+        val writer = if (useOpus) {
+            AacChapterWriter(
+                outFile, sampleRate = sampleRate,
+                mimeType = android.media.MediaFormat.MIMETYPE_AUDIO_OPUS,
+                muxerFormat = android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG,
+            )
+        } else {
+            AacChapterWriter(outFile, sampleRate = sampleRate)
+        }
         try {
             for ((n, chunk) in chunks.withIndex()) {
                 if (controller.cancelRequested) throw kotlinx.coroutines.CancellationException("stopped")
                 val t0 = System.nanoTime()
                 val audio = checkNotNull(engine.synthesize(chunk, book.voiceSid, book.speed)) { "Engine not loaded" }
-                writer.writePcm(audio.samples)
+                val pcm = if (audio.sampleRate != sampleRate) {
+                    com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)
+                } else audio.samples
+                writer.writePcm(pcm)
 
                 val synthSec = (System.nanoTime() - t0) / 1e9
                 val audioSec = audio.samples.size.toDouble() / audio.sampleRate
