@@ -260,7 +260,10 @@ fun BookDetailScreen(bookId: String?) {
         }
 
         items(book.chapters, key = { it.index }) { ch ->
-            ChapterRow(book, ch, onTap = {
+            val renderPct = (conversion as? ConversionState.Running)
+                ?.takeIf { it.bookId == book.id && it.chapterIndex == ch.index }
+                ?.let { r -> r.charsDoneInChapter.toFloat() / r.charsTotalInChapter.coerceAtLeast(1) }
+            ChapterRow(book, ch, renderPct = renderPct, onTap = {
                 if (ch.status == ChapterStatus.DONE && ch.audioFile != null) {
                     container.player.playBook(book, ch.index)
                 } else if (ch.status == ChapterStatus.FAILED) {
@@ -278,7 +281,12 @@ fun BookDetailScreen(bookId: String?) {
 }
 
 @Composable
-private fun ChapterRow(book: Book, chapter: com.forge.audiobookforge.data.model.Chapter, onTap: () -> Unit) {
+private fun ChapterRow(
+    book: Book,
+    chapter: com.forge.audiobookforge.data.model.Chapter,
+    renderPct: Float? = null,
+    onTap: () -> Unit,
+) {
     val audioExists = chapter.audioFile?.let {
         File(LocalAppContainer.current.library.audioDir(book.id), it).isFile()
     } == true
@@ -289,11 +297,24 @@ private fun ChapterRow(book: Book, chapter: com.forge.audiobookforge.data.model.
             .clickable(onClick = onTap)
             .padding(vertical = 6.dp, horizontal = 4.dp),
     ) {
-        when (chapter.status) {
-            ChapterStatus.DONE -> Icon(Icons.Filled.CheckCircle, contentDescription = "Done", tint = MaterialTheme.colorScheme.primary)
-            ChapterStatus.RENDERING -> Icon(Icons.Filled.RadioButtonUnchecked, contentDescription = "Rendering")
-            ChapterStatus.FAILED -> Icon(Icons.Filled.Error, contentDescription = "Failed", tint = MaterialTheme.colorScheme.error)
-            ChapterStatus.PENDING -> Icon(Icons.Filled.RadioButtonUnchecked, contentDescription = "Pending", tint = MaterialTheme.colorScheme.outline)
+        when {
+            chapter.status == ChapterStatus.DONE ->
+                Icon(Icons.Filled.CheckCircle, contentDescription = "Done", tint = MaterialTheme.colorScheme.primary)
+            chapter.status == ChapterStatus.FAILED ->
+                Icon(Icons.Filled.Error, contentDescription = "Failed", tint = MaterialTheme.colorScheme.error)
+            chapter.status == ChapterStatus.RENDERING && renderPct != null ->
+                androidx.compose.material3.CircularProgressIndicator(
+                    progress = { renderPct },
+                    modifier = Modifier.width(20.dp).height(20.dp),
+                    strokeWidth = 2.5.dp,
+                )
+            chapter.status == ChapterStatus.RENDERING ->
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.width(20.dp).height(20.dp),
+                    strokeWidth = 2.5.dp,
+                )
+            else ->
+                Icon(Icons.Filled.RadioButtonUnchecked, contentDescription = "Pending", tint = MaterialTheme.colorScheme.outline)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -301,6 +322,9 @@ private fun ChapterRow(book: Book, chapter: com.forge.audiobookforge.data.model.
             Text(
                 when {
                     chapter.durationMs > 0 -> fmtDur(chapter.durationMs)
+                    chapter.status == ChapterStatus.RENDERING && renderPct != null ->
+                        "rendering · ${(renderPct * 100).toInt()}%"
+                    chapter.status == ChapterStatus.RENDERING -> "rendering…"
                     chapter.status == ChapterStatus.PENDING -> "${chapter.charCount} chars"
                     else -> chapter.status.name.lowercase()
                 },
