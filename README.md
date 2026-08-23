@@ -50,9 +50,13 @@ pulled from k2-fsa's release assets, stored in app-private storage, fully offlin
 
 | Engine | RTF (sustained) | Notes |
 |---|---|---|
-| Kokoro 82M **fp32**, 6 threads | **~0.58** | best quality *and* fastest on this SoC |
+| Kokoro 82M **fp32**, 6 threads | **~0.58** | best quality *and* fastest on this SoC — default recommendation |
 | Kokoro 82M int8, 6 threads | 0.7 – 1.7 | ARM int8 kernels underperform; quantization overhead |
-| Piper Lite int8 | ~0.30 | thermally trivial, single voice |
+| Piper Lite int8 | ~0.30 | fastest, thermally trivial; audibly flatter narration |
+
+Listening verdict (by the project author): Kokoro fp32 sounds clearly better than
+both alternatives; Piper trades noticeable naturalness for ~2× more speed and a
+30 MB footprint — the right choice for modest hardware.
 
 RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
 Surprising finding: on modern flagship ARM, the fp32 model can be ~2× faster
