@@ -61,27 +61,42 @@ class LibraryRepository(private val context: Context) {
     suspend fun import(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         try {
             val cr = context.contentResolver
-            val display_name = queryDisplayName(uri) ?: "book.epub"
-            val ext = display_name.substringAfterLast('.', "epub").lowercase()
+            val display_name = queryDisplayName(uri) ?: ""
 
             val id = UUID.randomUUID().toString().take(8)
             val dir = dirFor(id).apply { mkdirs() }
-            val sourceFile = File(dir, "source.$ext")
+            val download = File(dir, "download")
             cr.openInputStream(uri)!!.use { input ->
-                sourceFile.outputStream().use { input.copyTo(it) }
+                download.outputStream().use { input.copyTo(it) }
+            }
+
+            // Trust content over filenames: SAF display names are unreliable
+            // (null, missing extensions, wrong extensions all happen).
+            val head = download.inputStream().use { input ->
+                val buf = ByteArray(4); val n = input.read(buf); buf.copyOf(n)
+            }
+            val looksEpub = head.size >= 2 && head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() // "PK" zip magic
+            val nameExt = display_name.substringAfterLast('.', "").lowercase()
+            val ext = when (nameExt) {
+                "epub" -> "epub"
+                "txt", "text" -> "txt"
+                else -> if (looksEpub) "epub" else "txt"
+            }
+            val sourceFile = File(dir, "source.$ext")
+            if (!download.renameTo(sourceFile)) {
+                download.copyTo(sourceFile, overwrite = true)
+                download.delete()
             }
 
             val parsed = when (ext) {
                 "epub" -> EpubParser.parse(sourceFile.inputStream())
-                "txt", "text" -> TxtParser.parse(sourceFile)
-                else -> return@withContext ImportResult.Error(
-                    "Unsupported format .$ext — EPUB and TXT are supported for now."
-                )
+                else -> TxtParser.parse(sourceFile)
             }
 
             val book = Book(
                 id = id,
-                title = parsed.title ?: display_name.substringBeforeLast('.'),
+                title = parsed.title
+                    ?: display_name.substringBeforeLast('.').ifBlank { "Untitled" },
                 author = parsed.author ?: "",
                 sourceFileName = sourceFile.name,
                 importedAtEpochMs = System.currentTimeMillis(),
