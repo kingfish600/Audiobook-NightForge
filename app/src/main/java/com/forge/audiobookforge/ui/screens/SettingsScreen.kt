@@ -184,12 +184,13 @@ fun SettingsScreen() {
                 val exportTree by container.settings.exportTreeUri.collectAsState()
                 Text("Export folder", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
+                val exportCtx = androidx.compose.ui.platform.LocalContext.current
                 val folderPicker = androidx.activity.compose.rememberLauncherForActivityResult(
                     androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
-                ) { uri ->
+                ) { uri: android.net.Uri? ->
                     if (uri != null) {
                         runCatching {
-                            ctx.contentResolver.takePersistableUriPermission(
+                            exportCtx.contentResolver.takePersistableUriPermission(
                                 uri,
                                 android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                                     android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
