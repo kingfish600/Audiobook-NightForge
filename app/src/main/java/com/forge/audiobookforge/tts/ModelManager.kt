@@ -89,7 +89,7 @@ class ModelManager(private val context: Context) {
                 ?: _ui.value.modelDir?.let { "the previously installed model" }
             update {
                 it.copy(
-                    downloading = true, error = null, notice = null, progress = 0f,
+                    downloading = true, error = null, progress = 0f,
                     phaseLabel = "Downloading ${option.title}…",
                     // Make replacement semantics explicit up front.
                     notice = if (replaced != null) "Will replace $replaced once the download verifies"
