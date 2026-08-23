@@ -135,7 +135,7 @@ fun SettingsScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = int8, onCheckedChange = { container.settings.setPreferInt8(it) })
                     Spacer(Modifier.padding(start = 8.dp))
-                    Text("Prefer int8 model (much faster)")
+                    Text("Prefer int8 weights (smaller download; often *slower* than full on flagship chips)")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = charging, onCheckedChange = { container.settings.setRequireCharging(it) })

@@ -46,6 +46,18 @@ pulled from k2-fsa's release assets, stored in app-private storage, fully offlin
   commons-compress (tar.bz2 extraction). EPUB/TXT parsing is hand-rolled and unit-tested.
 - Voice ids map to Kokoro's alphabetical `voices.bin` ordering (see `Voices.kt`).
 
+## Measured performance (Snapdragon 8 Elite, fan-cooled, plugged in)
+
+| Engine | RTF (sustained) | Notes |
+|---|---|---|
+| Kokoro 82M **fp32**, 6 threads | **~0.58** | best quality *and* fastest on this SoC |
+| Kokoro 82M int8, 6 threads | 0.7 – 1.7 | ARM int8 kernels underperform; quantization overhead |
+| Piper Lite int8 | ~0.30 | thermally trivial, single voice |
+
+RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
+Surprising finding: on modern flagship ARM, the fp32 model can be ~2× faster
+than its int8 variant — always benchmark before assuming quantized is quicker.
+
 ## Roadmap
 
 - Single-file `.m4b` output with chapter markers (needs chpl-atom muxing)

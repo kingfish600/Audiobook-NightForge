@@ -199,17 +199,17 @@ class ModelManager(private val context: Context) {
             ModelOption(
                 id = "kokoro-int8",
                 title = "Kokoro 82M · int8",
-                subtitle = "Studio quality, multilingual — recommended · ≈126 MB",
+                subtitle = "Smallest download, multilingual · ≈126 MB",
                 url = KOKORO_INT8_URL,
                 kind = EngineKind.KOKORO,
-                recommended = true,
             ),
             ModelOption(
                 id = "kokoro-fp32",
                 title = "Kokoro 82M · full precision",
-                subtitle = "Maximum quality, multilingual · ≈440 MB",
+                subtitle = "Best quality — often fastest too on modern chips · ≈440 MB",
                 url = KOKORO_FULL_URL,
                 kind = EngineKind.KOKORO,
+                recommended = true,
             ),
             ModelOption(
                 id = "piper-lessac",
