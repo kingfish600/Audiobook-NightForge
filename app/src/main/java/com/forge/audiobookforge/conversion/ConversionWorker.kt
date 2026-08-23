@@ -139,7 +139,11 @@ class ConversionWorker(
         ch.status = ChapterStatus.RENDERING
         repo.save(book)
 
-        val chunks = TextOps.splitIntoChunks(ch.text, maxLen = segmentLen)
+        // Punctuation-only fragments (dialogue dashes, stray quotes) can hang the
+        // native phonemizer — never feed them to the engine.
+        val allChunks = TextOps.splitIntoChunks(ch.text, maxLen = segmentLen)
+        val speakable = allChunks.filter { it.any { c -> c.isLetterOrDigit() } }
+        val chunks = speakable.ifEmpty { listOf(allChunks.firstOrNull() ?: "…") }
         val charsTotal = chunks.sumOf { it.length }.coerceAtLeast(1)
         var charsDone = 0
         val startedAt = System.currentTimeMillis()
@@ -163,7 +167,9 @@ class ConversionWorker(
                 val avgRtf = rtfWindow.average().toFloat()
                 log(
                     "chunk ${n + 1}/${chunks.size} seg=${segmentLen} chars=${chunk.length} " +
-                        "synth=%.2fs audio=%.1fs rtf=%.2f avg12=%.2f".format(synthSec, audioSec, rtf, avgRtf)
+                        "synth=%.2fs audio=%.1fs rtf=%.2f avg12=%.2f preview=%s".format(
+                            synthSec, audioSec, rtf, avgRtf, chunk.take(48).replace("\n", " ")
+                        )
                 )
 
                 controller.update(

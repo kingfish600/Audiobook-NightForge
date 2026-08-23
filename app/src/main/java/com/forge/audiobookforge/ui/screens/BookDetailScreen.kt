@@ -304,6 +304,8 @@ fun BookDetailScreen(bookId: String?) {
                     container.player.playBook(book, ch.index)
                 } else if (ch.status == ChapterStatus.FAILED) {
                     snackbarScope.launch { snackbar.showSnackbar("Chapter failed last time — re-run Render to retry it.") }
+                } else if (ch.status == ChapterStatus.RENDERING) {
+                    snackbarScope.launch { snackbar.showSnackbar("“${ch.title}” is being rendered right now.") }
                 } else {
                     snackbarScope.launch { snackbar.showSnackbar("Not rendered yet — tap “Render audiobook” first.") }
                 }
