@@ -168,7 +168,7 @@ fun BookDetailScreen(bookId: String?) {
                         )
                     }
                     Text(
-                        "Audio is rendered chapter-by-chapter in the background. You can keep using the phone; keep it plugged in for best results.",
+                        "Each chapter is forged in the background while you go about your day — or overnight. Keep it plugged in for best results.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -177,7 +177,7 @@ fun BookDetailScreen(bookId: String?) {
                     failed?.let {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
-                                Text("Render failed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleSmall)
+                                Text("Forge failed", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleSmall)
                                 Text(it.message, style = MaterialTheme.typography.bodySmall)
                                 TextButton(onClick = { container.conversion.idle() }) { Text("Dismiss") }
                             }
@@ -187,7 +187,7 @@ fun BookDetailScreen(bookId: String?) {
                     val notifsEnabled = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
                     if (!notifsEnabled) {
                         Text(
-                            "Notifications are off for this app — rendering still works, but you won't see progress in the notification shade.",
+                            "Notifications are off for this app — forging still works, but you won't see progress in the notification shade.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -228,7 +228,7 @@ fun BookDetailScreen(bookId: String?) {
                                     snackbarScope.launch { snackbar.showSnackbar("Stopping — finishing the current audio segment…") }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Icon(Icons.Filled.Pause, contentDescription = null); Text("  Stop rendering") }
+                            ) { Icon(Icons.Filled.Pause, contentDescription = null); Text("  Stop forging") }
                         }
                         modelUi.ready -> {
                             Button(
@@ -239,7 +239,7 @@ fun BookDetailScreen(bookId: String?) {
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                                Text(if (book.doneCount > 0) "  Continue rendering" else "  Render audiobook")
+                                Text(if (book.doneCount > 0) "  Continue forging" else "  Forge audiobook")
                             }
                             if (book.doneCount > 0) {
                                 Spacer(Modifier.height(8.dp))
@@ -304,11 +304,11 @@ fun BookDetailScreen(bookId: String?) {
                 if (ch.status == ChapterStatus.DONE && ch.audioFile != null) {
                     container.player.playBook(book, ch.index)
                 } else if (ch.status == ChapterStatus.FAILED) {
-                    snackbarScope.launch { snackbar.showSnackbar("Chapter failed last time — re-run Render to retry it.") }
+                    snackbarScope.launch { snackbar.showSnackbar("Chapter failed last time — re-run Forge to retry it.") }
                 } else if (ch.status == ChapterStatus.RENDERING) {
-                    snackbarScope.launch { snackbar.showSnackbar("“${ch.title}” is being rendered right now.") }
+                    snackbarScope.launch { snackbar.showSnackbar("“${ch.title}” is being forged right now.") }
                 } else {
-                    snackbarScope.launch { snackbar.showSnackbar("Not rendered yet — tap “Render audiobook” first.") }
+                    snackbarScope.launch { snackbar.showSnackbar("Not forged yet — tap “Forge audiobook” first.") }
                 }
             })
         }
@@ -362,8 +362,8 @@ private fun ChapterRow(
                 when {
                     chapter.durationMs > 0 -> fmtDur(chapter.durationMs)
                     chapter.status == ChapterStatus.RENDERING && renderPct != null ->
-                        "rendering · ${(renderPct * 100).toInt()}%"
-                    chapter.status == ChapterStatus.RENDERING -> "rendering…"
+                        "forging · ${(renderPct * 100).toInt()}%"
+                    chapter.status == ChapterStatus.RENDERING -> "forging…"
                     chapter.status == ChapterStatus.PENDING -> "${chapter.charCount} chars"
                     else -> chapter.status.name.lowercase()
                 },

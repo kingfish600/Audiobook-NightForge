@@ -152,7 +152,7 @@ fun SettingsScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = charging, onCheckedChange = { container.settings.setRequireCharging(it) })
                     Spacer(Modifier.padding(start = 8.dp))
-                    Text("Render only while charging (pauses when unplugged)")
+                    Text("Forge only while charging (pauses when unplugged)")
                 }
 
                 Spacer(Modifier.height(12.dp))
@@ -245,7 +245,7 @@ fun SettingsScreen() {
                                 ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             )
                         }
-                    }) { Text("Allow unrestricted background rendering…") }
+                    }) { Text("Allow unrestricted background forging…") }
                 }
             }
         }

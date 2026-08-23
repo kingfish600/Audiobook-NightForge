@@ -98,7 +98,7 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
                         Text("No books yet", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Import an EPUB or TXT file, then render it to audio\nright on this phone — no internet needed after setup.",
+                            "Import an EPUB or TXT file, then forge it into an audiobook\nright on this phone — no internet needed after setup.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
