@@ -40,6 +40,10 @@ object TxtParser {
         }.filter { it.text.isNotBlank() }
 
         require(chapters.isNotEmpty()) { "Text file produced no readable content" }
-        return EpubParser.ParsedBook(file.nameWithoutExtension.takeIf { it.isNotBlank() }, null, chapters)
+        // Internal storage names are meaningless ("source"); let the caller fall
+        // back to whatever the file picker reported instead.
+        val derivedTitle = sequenceOf(file.nameWithoutExtension, file.name)
+            .firstOrNull { it.isNotBlank() && it != "source" && it != "download" && !it.startsWith("source.") }
+        return EpubParser.ParsedBook(derivedTitle, null, chapters)
     }
 }
