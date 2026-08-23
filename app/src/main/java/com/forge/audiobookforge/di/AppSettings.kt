@@ -21,13 +21,21 @@ class AppSettings(context: Context) {
     private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, true))
     val requireCharging: StateFlow<Boolean> = _requireCharging.asStateFlow()
 
+    private val _segmentChars = MutableStateFlow(prefs.getInt(KEY_SEGMENT, 280))
+    val segmentChars: StateFlow<Int> = _segmentChars.asStateFlow()
+
     fun setNumThreads(v: Int) { prefs.edit().putInt(KEY_THREADS, v).apply(); _numThreads.value = v }
     fun setPreferInt8(v: Boolean) { prefs.edit().putBoolean(KEY_INT8, v).apply(); _preferInt8.value = v }
     fun setRequireCharging(v: Boolean) { prefs.edit().putBoolean(KEY_CHARGING, v).apply(); _requireCharging.value = v }
+    fun setSegmentChars(v: Int) {
+        val snapped = (v / 40) * 40
+        prefs.edit().putInt(KEY_SEGMENT, snapped).apply(); _segmentChars.value = snapped
+    }
 
     companion object {
         const val KEY_THREADS = "num_threads"
         const val KEY_INT8 = "prefer_int8"
         const val KEY_CHARGING = "require_charging"
+        const val KEY_SEGMENT = "segment_chars"
     }
 }

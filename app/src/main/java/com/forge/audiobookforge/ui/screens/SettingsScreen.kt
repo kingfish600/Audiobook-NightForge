@@ -117,6 +117,21 @@ fun SettingsScreen() {
                     valueRange = 1f..8f,
                     steps = 6,
                 )
+
+                val segLen by container.settings.segmentChars.collectAsState()
+                Text("Segment length: $segLen chars")
+                Text(
+                    "Text synthesized per engine call. Longer segments can be more efficient per " +
+                        "character; shorter ones stop sooner. Default 280.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = segLen.toFloat(),
+                    onValueChange = { container.settings.setSegmentChars(it.toInt()) },
+                    valueRange = 160f..720f,
+                    steps = 13,
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = int8, onCheckedChange = { container.settings.setPreferInt8(it) })
                     Spacer(Modifier.padding(start = 8.dp))

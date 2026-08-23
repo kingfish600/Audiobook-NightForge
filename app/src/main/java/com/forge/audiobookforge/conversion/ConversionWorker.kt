@@ -91,7 +91,7 @@ class ConversionWorker(
                 val existing = ch.audioFile?.let { File(repo.audioDir(bookId), it) }
                 if (ch.status == ChapterStatus.DONE && existing != null && existing.isFile) continue
 
-                renderChapter(engine, repo, controller, book, ch, sampleRate)
+                renderChapter(engine, repo, controller, book, ch, sampleRate, settings.segmentChars.value)
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
             }
@@ -118,16 +118,18 @@ class ConversionWorker(
         book: Book,
         ch: Chapter,
         sampleRate: Int,
+        segmentLen: Int,
     ) {
         val audioDir = repo.audioDir(book.id).apply { mkdirs() }
         val outFile = File(audioDir, "%03d.m4a".format(ch.index))
         ch.status = ChapterStatus.RENDERING
         repo.save(book)
 
-        val chunks = TextOps.splitIntoChunks(ch.text, maxLen = CHUNK_MAX_LEN)
+        val chunks = TextOps.splitIntoChunks(ch.text, maxLen = segmentLen)
         val charsTotal = chunks.sumOf { it.length }.coerceAtLeast(1)
         var charsDone = 0
         val startedAt = System.currentTimeMillis()
+        val rtfWindow = ArrayDeque<Float>()
 
         outFile.delete()
         val writer = AacChapterWriter(outFile, sampleRate = sampleRate)
@@ -142,6 +144,13 @@ class ConversionWorker(
                 val audioSec = audio.samples.size.toDouble() / audio.sampleRate
                 val rtf = if (audioSec > 0) (synthSec / audioSec).toFloat() else 0f
                 charsDone += chunk.length
+                rtfWindow.addLast(rtf)
+                if (rtfWindow.size > 12) rtfWindow.removeFirst()
+                val avgRtf = rtfWindow.average().toFloat()
+                log(
+                    "chunk ${n + 1}/${chunks.size} seg=${segmentLen} chars=${chunk.length} " +
+                        "synth=%.2fs audio=%.1fs rtf=%.2f avg12=%.2f".format(synthSec, audioSec, rtf, avgRtf)
+                )
 
                 controller.update(
                     ConversionState.Running(
@@ -153,7 +162,7 @@ class ConversionWorker(
                         chaptersTotal = book.chapters.size,
                         charsDoneInChapter = charsDone,
                         charsTotalInChapter = charsTotal,
-                        lastChunkRtf = rtf,
+                        lastChunkRtf = avgRtf,
                     )
                 )
                 if (n % 4 == 0 || n == chunks.lastIndex) {
