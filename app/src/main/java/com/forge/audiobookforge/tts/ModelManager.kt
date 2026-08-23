@@ -40,6 +40,7 @@ class ModelManager(private val context: Context) {
         val indeterminate: Boolean = false,
         val phaseLabel: String = "",
         val error: String? = null,
+        val notice: String? = null,
     )
 
     private val modelsRoot: File get() = File(context.filesDir, "models").apply { mkdirs() }
@@ -84,10 +85,15 @@ class ModelManager(private val context: Context) {
 
     suspend fun download(option: ModelOption) = withContext(Dispatchers.IO) {
         try {
+            val replaced = _ui.value.optionId?.let { id -> CATALOG.firstOrNull { it.id == id }?.title }
+                ?: _ui.value.modelDir?.let { "the previously installed model" }
             update {
                 it.copy(
-                    downloading = true, error = null, progress = 0f,
+                    downloading = true, error = null, notice = null, progress = 0f,
                     phaseLabel = "Downloading ${option.title}…",
+                    // Make replacement semantics explicit up front.
+                    notice = if (replaced != null) "Will replace $replaced once the download verifies"
+                             else "Preparing install…",
                 )
             }
             val archive = File(context.cacheDir, "${option.id}.tar.bz2")
@@ -129,10 +135,22 @@ class ModelManager(private val context: Context) {
             }
             if (option.id != "kokoro") File(modelsRoot, "kokoro").deleteRecursively()
 
-            update { it.copy(phaseLabel = "Ready") }
-            update { detect() }
+            val detected = detect()
+            update {
+                detected.copy(
+                    phaseLabel = "Ready",
+                    notice = "${option.title} installed — previous model removed",
+                )
+            }
         } catch (t: Throwable) {
-            update { it.copy(downloading = false, error = t.message ?: t.javaClass.simpleName, phaseLabel = "") }
+            update {
+                it.copy(
+                    downloading = false,
+                    error = t.message ?: t.javaClass.simpleName,
+                    notice = "Download failed — your previous model is untouched.",
+                    phaseLabel = "",
+                )
+            }
         }
     }
 

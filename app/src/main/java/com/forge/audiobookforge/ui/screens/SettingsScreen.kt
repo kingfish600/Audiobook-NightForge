@@ -94,6 +94,17 @@ fun SettingsScreen() {
                 if (!modelUi.ready && modelUi.error != null) {
                     Text(modelUi.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
+                modelUi.error?.takeIf { modelUi.ready }?.let {
+                    Text("Download failed: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                modelUi.notice?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (modelUi.error != null) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Row {
                     TextButton(onClick = { container.models.deleteModel() }) { Text("Delete installed model") }
                 }
