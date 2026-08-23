@@ -105,6 +105,12 @@ fun SettingsScreen() {
                 Text("Synthesis", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text("CPU threads: $threads")
+                Text(
+                    "More isn't better past the sweet spot — for Kokoro, 6 is typically fastest; " +
+                        "7–8 can be slower due to thread contention. Piper is less sensitive.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Slider(
                     value = threads.toFloat(),
                     onValueChange = { container.settings.setNumThreads(it.toInt().coerceIn(1, 8)) },
