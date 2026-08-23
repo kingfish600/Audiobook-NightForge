@@ -1,0 +1,12 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Large toolchain artifacts never belong in the repo
+app/src/main/jniLibs/*.tar.bz2
