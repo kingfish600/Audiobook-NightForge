@@ -100,7 +100,7 @@ fun BookDetailScreen(bookId: String?) {
                     DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                         Voices.ALL.forEach { v ->
                             DropdownMenuItem(
-                                text = { Text("${v.name} — ${v.description}") },
+                                text = { Text("${v.description} — ${v.name}") },
                                 onClick = {
                                     book.voiceSid = v.sid
                                     container.library.save(book)

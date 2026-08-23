@@ -73,4 +73,6 @@ than its int8 variant — always benchmark before assuming quantized is quicker.
 
 ## License
 
-Apache-2.0. Kokoro model weights: Apache-2.0 (hexgrad/kokoro). sherpa-onnx: Apache-2.0.
+**This project is MIT-licensed** — see [LICENSE](LICENSE). Do what you like with the code.
+
+Third-party components keep their own licenses, none changed by bundling: sherpa-onnx (Apache-2.0), Kokoro model weights (Apache-2.0, hexgrad/kokoro), pdfbox-android (Apache-2.0), commons-compress (Apache-2.0). Full details in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
