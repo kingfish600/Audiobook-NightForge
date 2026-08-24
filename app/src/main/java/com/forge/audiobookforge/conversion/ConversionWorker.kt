@@ -55,6 +55,15 @@ class ConversionWorker(
         val runId = controller.beginRun()
         log("worker started for '${book.title}' (${book.chapters.size} chapters)")
 
+        // WorkManager starts workers at THREAD_PRIORITY_BACKGROUND; combined
+        // with Doze/OEM standby this clamps overnight renders to efficiency
+        // cores (observed RTF 0.5 -> 2.5 across a night). Promote to urgent
+        // audio so the scheduler treats synthesis like what it is.
+        runCatching {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+            log("worker thread priority promoted to URGENT_AUDIO")
+        }
+
         // React on-screen immediately so a click never looks like a no-op.
         controller.update(
             ConversionState.Running(
