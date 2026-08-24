@@ -91,6 +91,18 @@ class ConversionWorker(
         wakeLock.setReferenceCounted(false)
         wakeLock.acquire(MAX_WAKE_MS)
 
+        // Optional plugged-in-night mode: hold the display on so ROM gaming
+        // clocks stay engaged (they typically disengage at screen-off even
+        // with a CPU wake lock held). Deprecated lock is intentional.
+        @Suppress("DEPRECATION")
+        val screenLock = if (settings.keepScreenAwake.value) {
+            (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "NightForge:screen")
+        } else null
+        screenLock?.setReferenceCounted(false)
+        screenLock?.acquire(MAX_WAKE_MS)
+        if (screenLock != null) log("screen-awake lock held (performance clocks should persist)")
+
         var failed = false
         try {
             val codec = settings.codec.value
@@ -127,6 +139,7 @@ class ConversionWorker(
             postProgress(applicationContext, book.title, 0f, "Error: ${t.message ?: t.javaClass.simpleName}")
         } finally {
             runCatching { if (wakeLock.isHeld) wakeLock.release() }
+            runCatching { if (screenLock?.isHeld == true) screenLock.release() }
             engine.release()
             controller.endRun(runId)
             NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_ID)

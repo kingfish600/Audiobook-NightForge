@@ -27,6 +27,8 @@ class AppSettings(context: Context) {
     private val _codec = MutableStateFlow(prefs.getString(KEY_CODEC, "opus") ?: "opus")
     val codec: StateFlow<String> = _codec.asStateFlow()
 
+    private val _keepScreenAwake = MutableStateFlow(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false))
+    val keepScreenAwake: StateFlow<Boolean> = _keepScreenAwake.asStateFlow()
     private val _exportTreeUri = MutableStateFlow(prefs.getString(KEY_EXPORT_TREE, null))
     val exportTreeUri: StateFlow<String?> = _exportTreeUri.asStateFlow()
 
@@ -34,6 +36,7 @@ class AppSettings(context: Context) {
     fun setPreferInt8(v: Boolean) { prefs.edit().putBoolean(KEY_INT8, v).apply(); _preferInt8.value = v }
     fun setRequireCharging(v: Boolean) { prefs.edit().putBoolean(KEY_CHARGING, v).apply(); _requireCharging.value = v }
     fun setCodec(v: String) { prefs.edit().putString(KEY_CODEC, v).apply(); _codec.value = v }
+    fun setKeepScreenAwake(v: Boolean) { prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, v).apply(); _keepScreenAwake.value = v }
     fun setExportTreeUri(v: String?) {
         prefs.edit().putString(KEY_EXPORT_TREE, v).apply(); _exportTreeUri.value = v
     }
@@ -49,5 +52,6 @@ class AppSettings(context: Context) {
         const val KEY_SEGMENT = "segment_chars"
         const val KEY_CODEC = "audio_codec"
         const val KEY_EXPORT_TREE = "export_tree_uri"
+        const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
     }
 }

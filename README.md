@@ -80,10 +80,9 @@ RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
 - ~~PDF input~~ ✅ shipped in v0.3.0 (born-digital text via PdfBox-Android)
 - Per-chapter parallelism / NNAPI execution provider experiments
 - Export/share rendered books to other audiobook players
-- **Screen-off throttling**: gaming/performance clocks often disengage when the
-  display sleeps, so overnight renders run at stock speeds even though our
-  wake lock keeps the CPU awake. Candidate fix: an opt-in "keep screen awake
-  while forging (plugged-in)" toggle rendering at zero brightness.
+- ~~Screen-off throttling~~ ✅ shipped in v0.3.4 — opt-in **"Keep screen awake
+  while forging"** holds the display on (zero-brightness recommended) so ROM
+  gaming clocks persist through plugged-in overnight renders.
 
 **Won't fix:** MOBI/AZW3 input — proprietary, declining format; convert to EPUB once with Calibre instead (Amazon itself dropped MOBI uploads in 2022). DRM-protected files are out of scope permanently.
 

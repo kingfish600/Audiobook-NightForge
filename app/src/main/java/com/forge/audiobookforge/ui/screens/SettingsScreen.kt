@@ -155,6 +155,18 @@ fun SettingsScreen() {
                     Spacer(Modifier.padding(start = 8.dp))
                     Text("Forge only while charging (pauses when unplugged)")
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val keepAwake by container.settings.keepScreenAwake.collectAsState()
+                    Switch(checked = keepAwake, onCheckedChange = { container.settings.setKeepScreenAwake(it) })
+                    Spacer(Modifier.padding(start = 8.dp))
+                    Text("Keep screen awake while forging (for plugged-in nights)")
+                }
+                Text(
+                    "Holds the display on so performance clocks stay engaged overnight. " +
+                        "Set brightness to minimum first — and leave this off when running on battery.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 Spacer(Modifier.height(12.dp))
                 val codec by container.settings.codec.collectAsState()
