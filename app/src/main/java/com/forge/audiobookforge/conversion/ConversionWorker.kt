@@ -106,7 +106,10 @@ class ConversionWorker(
         @Suppress("DEPRECATION")
         val screenLock = if (settings.keepScreenAwake.value) {
             (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "NightForge:screen")
+                .newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "NightForge:screen",
+                )
         } else null
         screenLock?.setReferenceCounted(false)
         screenLock?.acquire(MAX_WAKE_MS)
