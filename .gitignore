@@ -10,3 +10,7 @@ captures/
 
 # Large toolchain artifacts never belong in the repo
 app/src/main/jniLibs/*.tar.bz2
+
+# Distribution artifacts and IDE noise
+*.apk
+.kotlin/
