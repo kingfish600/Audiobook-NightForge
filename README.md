@@ -46,26 +46,38 @@ pulled from k2-fsa's release assets, stored in app-private storage, fully offlin
   commons-compress (tar.bz2 extraction). EPUB/TXT/PDF parsing is hand-rolled and unit-tested.
 - Voice ids map to Kokoro's alphabetical `voices.bin` ordering (see `Voices.kt`).
 
-## Measured performance (Snapdragon 8 Elite, fan-cooled, plugged in)
+## Measured performance (Snapdragon 8 Elite, plugged in)
 
-| Engine | RTF (sustained) | Notes |
-|---|---|---|
-| Kokoro 82M **fp32**, 6 threads | **~0.58** | best quality *and* fastest on this SoC — default recommendation |
-| Kokoro 82M int8, 6 threads | 0.7 – 1.7 | ARM int8 kernels underperform; quantization overhead |
-| Piper Lite int8 | ~0.30 | fastest, thermally trivial; audibly flatter narration |
+Multi-hour full-book renders, real EPUB content, per-chapter RTF tracked start to finish:
+
+| Engine / mode | RTF cold | RTF sustained | Notes |
+|---|---|---|---|
+| Kokoro 82M **fp32**, 6 threads, stock clocks | 0.51 | ~0.59–0.60 plateau | default recommendation |
+| Kokoro 82M **fp32**, 6 threads, perf mode | 0.44 | converges to ~0.59 | wins the first hour only |
+| Kokoro 82M int8, 6 threads | — | 0.7 → 1.7 spiral | ARM int8 kernels underperform |
+| Piper Lite int8 | ~0.30 | ~0.30 flat | thermally trivial; audibly flatter |
+
+**Findings worth stealing:**
+
+- **RTF is thermally bounded.** Stock and boosted clocks converge on the same
+  ~0.6 equilibrium on this chassis — higher clocks arrive sooner and pay it back
+  as heat soak. Mode choice is a *book-length* decision: short content finishes
+  inside perf mode's golden hour; overnight novels do the same job either way.
+- **Quality is independent of speed.** Same model, same output bits at any RTF;
+  faster rendering buys more books per night, not better ones.
+- On modern flagship ARM the fp32 model can be ~2× **faster** than its int8
+  variant — always benchmark before assuming quantized is quicker.
 
 Listening verdict (by the project author): Kokoro fp32 sounds clearly better than
 both alternatives; Piper trades noticeable naturalness for ~2× more speed and a
 30 MB footprint — the right choice for modest hardware.
 
 RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
-Surprising finding: on modern flagship ARM, the fp32 model can be ~2× faster
-than its int8 variant — always benchmark before assuming quantized is quicker.
 
 ## Roadmap
 
 - Single-file `.m4b` output with chapter markers (needs chpl-atom muxing)
-- PDF input (PdfBox-Android)
+- ~~PDF input~~ ✅ shipped in v0.3.0 (born-digital text via PdfBox-Android)
 - Per-chapter parallelism / NNAPI execution provider experiments
 - Export/share rendered books to other audiobook players
 
