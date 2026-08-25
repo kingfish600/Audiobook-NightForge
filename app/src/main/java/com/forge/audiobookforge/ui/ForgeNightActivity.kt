@@ -73,7 +73,7 @@ class ForgeNightActivity : ComponentActivity() {
                         if (s is ConversionState.Running) {
                             Text(
                                 "${s.bookTitle}",
-                                color = Color(0xFF2A2A2A),
+                                color = Color(0xFF8F886B),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Spacer(Modifier.height(8.dp))
