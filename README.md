@@ -79,6 +79,12 @@ both alternatives; Piper trades noticeable naturalness for ~2× more speed and a
 
 RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
 
+## Accessibility
+
+NightForge targets TalkBack compatibility: every interactive control carries a
+spoken label. Feedback from screen-reader users is especially welcome — open an
+issue with what you hear and what you expected.
+
 ## Drop-in models (no rebuild required)
 
 NightForge can run any sherpa-onnx offline TTS bundle you place on the device:

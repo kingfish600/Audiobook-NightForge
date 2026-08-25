@@ -235,7 +235,7 @@ fun BookDetailScreen(bookId: String?) {
                                     snackbarScope.launch { snackbar.showSnackbar("Stopping — finishing the current audio segment…") }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Icon(Icons.Filled.Pause, contentDescription = null); Text("  Stop") }
+                            ) { Icon(Icons.Filled.Pause, contentDescription = "Stop forging"); Text("  Stop") }
                         }
                         running != null -> {
                             LinearProgressIndicator(
@@ -254,7 +254,7 @@ fun BookDetailScreen(bookId: String?) {
                                     snackbarScope.launch { snackbar.showSnackbar("Stopping — finishing the current audio segment…") }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Icon(Icons.Filled.Pause, contentDescription = null); Text("  Stop forging") }
+                            ) { Icon(Icons.Filled.Pause, contentDescription = "Stop forging"); Text("  Stop forging") }
                         }
                         modelUi.ready -> {
                             Button(
@@ -274,7 +274,7 @@ fun BookDetailScreen(bookId: String?) {
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Icon(Icons.Filled.PlayArrow, contentDescription = "Start forging")
                                 Text(if (book.doneCount > 0) "  Continue forging" else "  Forge audiobook")
                             }
                             if (book.doneCount > 0) {

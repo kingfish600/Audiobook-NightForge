@@ -74,7 +74,7 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
                 onClick = {
                     importLauncher.launch(arrayOf("application/epub+zip", "text/plain", "application/pdf", "application/octet-stream"))
                 },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                icon = { Icon(Icons.Filled.Add, contentDescription = "Add a book") },
                 text = { Text("Import EPUB / TXT") },
             )
         },
