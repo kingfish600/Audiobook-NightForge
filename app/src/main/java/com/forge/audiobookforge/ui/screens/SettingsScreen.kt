@@ -179,13 +179,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setForgeScreen("day") },
                         label = { Text("☀ Day view") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFF2E2818)
+                            containerColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFE5B567)
+                            labelColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                          else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            2.dp, if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFE5B567)
+                            2.dp, if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
@@ -195,13 +195,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setForgeScreen("night") },
                         label = { Text("🌙 Night forge") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFF2E2A1C)
+                            containerColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFCFC49A)
+                            labelColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                          else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            2.dp, if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFCFC49A)
+                            2.dp, if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
@@ -227,12 +227,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setCodec("opus") },
                         label = { Text("Opus · .ogg") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (codec == "opus") MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (codec == "opus") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (codec == "opus") androidx.compose.ui.graphics.Color(0xFFFFB59B)
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, if (codec == "opus") MaterialTheme.colorScheme.primary
+                            1.dp, if (codec == "opus") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
@@ -242,12 +243,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setCodec("aac") },
                         label = { Text("AAC · .m4a") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (codec == "aac") MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (codec == "aac") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (codec == "aac") androidx.compose.ui.graphics.Color(0xFFFFB59B)
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, if (codec == "aac") MaterialTheme.colorScheme.primary
+                            1.dp, if (codec == "aac") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
@@ -257,12 +259,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setCodec("wav") },
                         label = { Text("WAV · lossless") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (codec == "wav") MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (codec == "wav") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (codec == "wav") androidx.compose.ui.graphics.Color(0xFFFFB59B)
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, if (codec == "wav") MaterialTheme.colorScheme.primary
+                            1.dp, if (codec == "wav") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
