@@ -236,12 +236,14 @@ fun BookDetailScreen(bookId: String?) {
                                 onClick = {
                                     ConversionWorker.enqueue(context, bookId!!, requireCharging = settings)
                                 if (container.settings.keepScreenAwake.value) {
-                                    context.startActivity(
-                                        android.content.Intent(
-                                            context,
-                                            com.forge.audiobookforge.ui.ForgeNightActivity::class.java,
+                                    runCatching {
+                                        context.startActivity(
+                                            android.content.Intent(
+                                                context,
+                                                com.forge.audiobookforge.ui.ForgeNightActivity::class.java,
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                                 },
                                 modifier = Modifier.fillMaxWidth(),

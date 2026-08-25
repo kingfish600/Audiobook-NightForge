@@ -22,8 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.forge.audiobookforge.ForgeApp
 import com.forge.audiobookforge.conversion.ConversionState
-import com.forge.audiobookforge.di.LocalAppContainer
 
 /**
  * Night Forge: a pitch-black, zero-brightness fullscreen activity that stays
@@ -46,7 +46,9 @@ class ForgeNightActivity : ComponentActivity() {
         window.attributes.screenBrightness = 0f
 
         setContent {
-            val container = LocalAppContainer.current
+            // Standalone activity: no CompositionLocal provider here — reach
+            // the app graph through the Application instance instead.
+            val container = (application as ForgeApp).container
             val state by container.conversion.state.collectAsState()
 
             LaunchedEffect(state) {
