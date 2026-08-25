@@ -10,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.forge.audiobookforge"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.forge.audiobookforge"
         minSdk = 29
-        targetSdk = 34
-        versionCode = 62
-        versionName = "0.6.8"
+        targetSdk = 36
+        versionCode = 63
+        versionName = "0.6.9"
 
         // RedMagic 10S Pro and effectively all modern devices are arm64.
         // Add "x86_64" here if you want emulator support (requires matching .so files).
