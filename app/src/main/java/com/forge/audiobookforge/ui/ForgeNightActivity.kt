@@ -89,15 +89,22 @@ class ForgeNightActivity : ComponentActivity() {
                                 color = Color(0xFF8F886B),
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "rtf %.2f   ·   %.0f%%".format(s.lastChunkRtf, s.overallFraction * 100),
+                                color = Color(0xFFCFC49A),
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                            Spacer(Modifier.height(10.dp))
                             Text(
                                 "chapter ${s.chaptersDone + 1} of ${s.chaptersTotal} — ${s.chapterTitle}",
-                                color = Color(0xFF222222),
-                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF6E6852),
+                                style = MaterialTheme.typography.bodyMedium,
                             )
+                            Spacer(Modifier.height(4.dp))
                             Text(
                                 "forging… leave this screen on",
-                                color = Color(0xFF1E1E1E),
+                                color = Color(0xFF55503E),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         } else {
