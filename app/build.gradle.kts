@@ -16,8 +16,8 @@ android {
         applicationId = "com.forge.audiobookforge"
         minSdk = 29
         targetSdk = 34
-        versionCode = 56
-        versionName = "0.6.2"
+        versionCode = 57
+        versionName = "0.6.3"
 
         // RedMagic 10S Pro and effectively all modern devices are arm64.
         // Add "x86_64" here if you want emulator support (requires matching .so files).
