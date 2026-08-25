@@ -129,26 +129,46 @@ private object ChapterBox {
     private data class Child(val type: String, val bytes: ByteArray)
 
     fun writeChapters(f: File, chapters: List<M4bExporter.Entry>, totalMs: Long) {
-        // Top-level walk to locate moov (must be last box).
-        var off = 0L
+        // Top-level walk to locate moov (must be last box). Uses RandomAccessFile
+        // because InputStream.skip() may legally skip FEWER bytes than requested,
+        // silently desyncing the scan. On failure the exception carries the full
+        // box layout + head hexdump so remote diagnosis needs zero guessing.
         var moovOff = -1L
         var moovLen = 0
+        val layout = ArrayList<String>()
         val len = f.length()
-        while (off < len) {
-            val hdr = f.inputStream().use { ins ->
-                val b = ByteArray(8)
-                ins.skip(off)
-                var n = 0
-                while (n < 8) { val k = ins.read(b, n, 8 - n); if (k < 0) break; n += k }
-                b
+        java.io.RandomAccessFile(f, "r").use { raf ->
+            var off = 0L
+            while (off + 8 <= len) {
+                raf.seek(off)
+                val hdr = ByteArray(8).also { raf.readFully(it) }
+                var size = readU32(hdr, 0).toLong() and 0xFFFFFFFFL
+                val type = String(hdr, 4, 4, Charsets.US_ASCII)
+                if (size == 1L) {
+                    // 64-bit largesize box
+                    val lb = ByteArray(8).also { raf.readFully(it) }
+                    var ls = 0L
+                    for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
+                    size = ls
+                } else if (size == 0L) {
+                    size = len - off // extends to EOF
+                }
+                layout.add("$type@$off+$size")
+                if (type == "moov") {
+                    check(size <= Int.MAX_VALUE) { "moov too large (>2GB)" }
+                    moovOff = off
+                    moovLen = size.toInt()
+                }
+                if (size < 8) break // malformed; avoid infinite loop
+                off += size
             }
-            val size = readU32(hdr, 0)
-            val type = String(hdr, 4, 4, Charsets.US_ASCII)
-            if (type == "moov") { moovOff = off; moovLen = size }
-            if (size <= 0) break
-            off += size
         }
-        check(moovOff >= 0) { "moov atom not found" }
+        if (moovOff < 0) {
+            val head = ByteArray(48)
+            java.io.RandomAccessFile(f, "r").use { raf -> raf.seek(0); raf.readFully(head) }
+            val hex = head.joinToString("") { b -> "%02x".format(b) }
+            error("moov atom not found | len=$len | boxes=${layout.joinToString(",")} | head=$hex")
+        }
         check(moovOff + moovLen >= len) { "moov is not the final atom — refusing to edit" }
         check(moovLen < Int.MAX_VALUE) { "moov too large (>2GB) for safe editing" }
 
