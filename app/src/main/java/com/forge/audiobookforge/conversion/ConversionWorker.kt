@@ -104,7 +104,7 @@ class ConversionWorker(
         // clocks stay engaged (they typically disengage at screen-off even
         // with a CPU wake lock held). Deprecated lock is intentional.
         @Suppress("DEPRECATION")
-        val screenLock = if (settings.keepScreenAwake.value) {
+        val screenLock = if (settings.forgeScreen.value == "night") {
             (applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
                 .newWakeLock(
                     PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,

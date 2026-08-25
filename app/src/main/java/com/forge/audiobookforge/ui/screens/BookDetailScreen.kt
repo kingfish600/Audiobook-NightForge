@@ -235,7 +235,7 @@ fun BookDetailScreen(bookId: String?) {
                                 enabled = runningElsewhere == null,
                                 onClick = {
                                     ConversionWorker.enqueue(context, bookId!!, requireCharging = settings)
-                                if (container.settings.keepScreenAwake.value) {
+                                if (container.settings.forgeScreen.value == "night") {
                                     runCatching {
                                         context.startActivity(
                                             android.content.Intent(
