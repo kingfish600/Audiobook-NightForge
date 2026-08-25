@@ -223,18 +223,45 @@ fun SettingsScreen() {
                         selected = codec == "opus",
                         onClick = { container.settings.setCodec("opus") },
                         label = { Text("Opus · .ogg") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = if (codec == "opus") MaterialTheme.colorScheme.primaryContainer
+                                             else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, if (codec == "opus") MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.outline,
+                        ),
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(
                         selected = codec == "aac",
                         onClick = { container.settings.setCodec("aac") },
                         label = { Text("AAC · .m4a") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = if (codec == "aac") MaterialTheme.colorScheme.primaryContainer
+                                             else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, if (codec == "aac") MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.outline,
+                        ),
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(
                         selected = codec == "wav",
                         onClick = { container.settings.setCodec("wav") },
                         label = { Text("WAV · lossless") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = if (codec == "wav") MaterialTheme.colorScheme.primaryContainer
+                                             else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, if (codec == "wav") MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.outline,
+                        ),
                     )
                 }
                 Text(
