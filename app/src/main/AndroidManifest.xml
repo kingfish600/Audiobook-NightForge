@@ -29,6 +29,8 @@
         <activity
             android:name=".ui.ForgeNightActivity"
             android:exported="false"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
