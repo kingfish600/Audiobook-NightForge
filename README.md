@@ -91,10 +91,10 @@ Same-family models (future Kokoro releases, other Piper voices, Matcha) drop str
 
 ## Roadmap
 
-- Single-file `.m4b` output with chapter markers (needs chpl-atom muxing)
+- Single-file `.m4b` output ✅ shipped in v0.6.0 — lossless AAC remux of all chapters into one file with Nero `chpl` chapter atoms; per-chapter files remain untouched (AAC books only — Opus/WAV stay chaptered)
 - ~~PDF input~~ ✅ shipped in v0.3.0 (born-digital text via PdfBox-Android)
 - Per-chapter parallelism / NNAPI execution provider experiments
-- Export/share rendered books to other audiobook players
+- Export/share rendered books ✅ covered for audiobook players via the v0.6.0 single-file .m4b export (imports into Smart AudioBook Player, Listen, Voice, etc.)
 - ~~Screen-off throttling~~ ✅ shipped in v0.3.4 — opt-in **"Keep screen awake
   while forging"** holds the display on (zero-brightness recommended) so ROM
   gaming clocks persist through plugged-in overnight renders.

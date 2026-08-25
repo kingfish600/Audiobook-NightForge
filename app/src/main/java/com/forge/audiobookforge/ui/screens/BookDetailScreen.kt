@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +76,30 @@ fun BookDetailScreen(bookId: String?) {
 
     val snackbar = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    var pendingM4b by remember { mutableStateOf<java.io.File?>(null) }
+    val m4bLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("audio/x-m4b"),
+    ) { uri ->
+        val src = pendingM4b
+        if (uri != null && src != null) {
+            snackbarScope.launch {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        src.inputStream().use { it.copyTo(out) }
+                    } ?: error("Could not open destination")
+                }.onSuccess {
+                    src.delete()
+                    pendingM4b = null
+                    snackbar.showSnackbar("Single-file audiobook saved")
+                }.onFailure { t ->
+                    snackbar.showSnackbar("m4b export failed: ${t.message ?: t.javaClass.simpleName}")
+                }
+            }
+        } else {
+            src?.delete()
+            pendingM4b = null
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -272,6 +298,28 @@ fun BookDetailScreen(bookId: String?) {
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                 ) { Text("Export ${book.doneCount} chapter(s) to Music library") }
+
+                                Spacer(Modifier.height(8.dp))
+                                if (!com.forge.audiobookforge.audio.M4bExporter.requiresAac(book)) {
+                                    TextButton(
+                                        onClick = {
+                                            snackbarScope.launch {
+                                                val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    val tmp = java.io.File(context.cacheDir, "${book.title}.m4b")
+                                                    com.forge.audiobookforge.audio.M4bExporter.export(
+                                                        book,
+                                                        container.library.audioDir(book.id),
+                                                        tmp,
+                                                    )
+                                                }
+                                                pendingM4b = res.file
+                                                m4bLauncher.launch("${book.title}.m4b")
+                                                snackbar.showSnackbar("Bundled ${res.chapters} chapters — choose where to save")
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text("Export single-file .m4b (with chapters)") }
+                                }
                             }
                         }
                         else -> {
