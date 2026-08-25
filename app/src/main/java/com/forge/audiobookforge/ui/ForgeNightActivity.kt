@@ -42,8 +42,9 @@ class ForgeNightActivity : ComponentActivity() {
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // True zero on OLED = pixels off; display state remains "on".
-        window.attributes.screenBrightness = 0f
+        // Small positive floor: 0 asks the system for default brightness and
+        // renders OLED pixels fully off (invisible text). 0.01 stays faint.
+        window.attributes.screenBrightness = 0.01f
 
         setContent {
             // Standalone activity: no CompositionLocal provider here — reach
@@ -51,8 +52,20 @@ class ForgeNightActivity : ComponentActivity() {
             val container = (application as ForgeApp).container
             val state by container.conversion.state.collectAsState()
 
+            val wantedBook = intent.getStringExtra("bookId")
+            var sawRunning = false
+            // Patience timer keyed ON STATE CHANGES: any progress re-arms it,
+            // so slow engine loads and resumes can't outlive our wait. Only
+            // 30s of total silence closes the screen.
             LaunchedEffect(state) {
-                if (state !is ConversionState.Running) finish()
+                when {
+                    state is ConversionState.Running -> sawRunning = true
+                    state is ConversionState.Failed &&
+                        (wantedBook == null || (state as ConversionState.Failed).bookId == wantedBook) -> finish()
+                    state !is ConversionState.Running && sawRunning -> finish()
+                }
+                kotlinx.coroutines.delay(30_000)
+                if (!sawRunning) finish()
             }
 
             MaterialTheme(
