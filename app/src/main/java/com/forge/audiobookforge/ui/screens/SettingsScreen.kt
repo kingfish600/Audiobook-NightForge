@@ -155,31 +155,60 @@ fun SettingsScreen() {
                     Spacer(Modifier.padding(start = 8.dp))
                     Text("Forge only while charging (pauses when unplugged)")
                 }
+                Spacer(Modifier.height(20.dp))
+                Text("While forging, keep screen", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(6.dp))
                 val forgeScreen by container.settings.forgeScreen.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.FilterChip(
                         selected = forgeScreen == "off",
                         onClick = { container.settings.setForgeScreen("off") },
                         label = { Text("Off") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, MaterialTheme.colorScheme.outline,
+                        ),
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(
                         selected = forgeScreen == "day",
                         onClick = { container.settings.setForgeScreen("day") },
-                        label = { Text("Day view") },
+                        label = { Text("☀ Day view") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = if (forgeScreen == "day") MaterialTheme.colorScheme.primaryContainer
+                                             else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, if (forgeScreen == "day") MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.outline,
+                        ),
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(
                         selected = forgeScreen == "night",
                         onClick = { container.settings.setForgeScreen("night") },
                         label = { Text("🌙 Night forge") },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = if (forgeScreen == "night") MaterialTheme.colorScheme.primaryContainer
+                                             else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, if (forgeScreen == "night") MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.outline,
+                        ),
                     )
                 }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     when (forgeScreen) {
-                        "day" -> "Day view: the screen stays on at normal brightness while forging — watch rings fill and listen. App must stay in front; best while charging."
+                        "day" -> "Day view: screen stays on at normal brightness while forging — watch rings fill and listen. App must stay in front; best while charging."
                         "night" -> "Night forge: a black fullscreen view holds foreground status so performance clocks persist overnight. Set brightness low first."
-                        else -> "Screen handling while forging is off — background runs may be clock-throttled by your device."
+                        else -> "Off: no screen handling — background runs may be clock-throttled by your device."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
