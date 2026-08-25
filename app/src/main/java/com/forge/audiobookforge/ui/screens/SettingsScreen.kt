@@ -166,10 +166,11 @@ fun SettingsScreen() {
                         label = { Text("Off") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
                             containerColor = MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (forgeScreen == "off") MaterialTheme.colorScheme.onSurfaceVariant
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, MaterialTheme.colorScheme.outline,
+                            1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (forgeScreen == "off") 1f else 0.6f),
                         ),
                     )
                     Spacer(Modifier.padding(start = 8.dp))
@@ -178,12 +179,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setForgeScreen("day") },
                         label = { Text("☀ Day view") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (forgeScreen == "day") MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFF2E2818)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFE5B567)
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, if (forgeScreen == "day") MaterialTheme.colorScheme.primary
+                            2.dp, if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFE5B567)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
@@ -193,12 +195,13 @@ fun SettingsScreen() {
                         onClick = { container.settings.setForgeScreen("night") },
                         label = { Text("🌙 Night forge") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (forgeScreen == "night") MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFF2E2A1C)
                                              else MaterialTheme.colorScheme.surface,
-                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            labelColor = if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFCFC49A)
+                                         else MaterialTheme.colorScheme.onSurface,
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp, if (forgeScreen == "night") MaterialTheme.colorScheme.primary
+                            2.dp, if (forgeScreen == "night") androidx.compose.ui.graphics.Color(0xFFCFC49A)
                                   else MaterialTheme.colorScheme.outline,
                         ),
                     )
