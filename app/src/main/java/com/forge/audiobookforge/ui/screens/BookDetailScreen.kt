@@ -241,7 +241,7 @@ fun BookDetailScreen(bookId: String?) {
                                             android.content.Intent(
                                                 context,
                                                 com.forge.audiobookforge.ui.ForgeNightActivity::class.java,
-                                            )
+                                            ).putExtra("bookId", bookId)
                                         )
                                     }
                                 }
