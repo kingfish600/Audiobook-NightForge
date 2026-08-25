@@ -45,10 +45,57 @@ class ModelManager(private val context: Context) {
 
     private val modelsRoot: File get() = File(context.filesDir, "models").apply { mkdirs() }
 
+    /**
+     * USB drop-in bay: user-reachable via MTP at
+     * Android/data/com.forge.audiobookforge/files/models/<AnyName>/
+     * A valid bundle contains a model .onnx + tokens.txt (voices.bin optional).
+     */
+    val externalModelsRoot: File? =
+        context.getExternalFilesDir(null)?.let { File(it, "models").apply { mkdirs() } }
+
+    fun isValidBundle(dir: File): Boolean =
+        dir.isDirectory &&
+            KokoroEngine.chooseModelFile(dir, preferInt8 = true) != null &&
+            File(dir, "tokens.txt").isFile()
+
+    fun listExternal(): List<File> =
+        externalModelsRoot?.listFiles { f -> f.isDirectory }
+            ?.filter { isValidBundle(it) }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+
+    fun activateExternal(dir: File) {
+        require(isValidBundle(dir)) { "Not a usable model bundle" }
+        prefs().edit().putString("active_model_path", dir.absolutePath).apply()
+        _ui.value = detect()
+    }
+
+    fun useCatalog() {
+        prefs().edit().remove("active_model_path").apply()
+        _ui.value = detect()
+    }
+
+    private fun prefs() = context.getSharedPreferences("forge_settings", Context.MODE_PRIVATE)
+
     private val _ui = MutableStateFlow(detect())
     val ui: StateFlow<ModelUi> = _ui.asStateFlow()
 
     fun detect(): ModelUi {
+        // 1. Explicit user choice wins if still valid (drop-in or catalog path).
+        prefs().getString("active_model_path", null)?.let { path ->
+            val dir = File(path)
+            if (isValidBundle(dir)) {
+                return ModelUi(
+                    ready = true,
+                    modelDir = dir,
+                    optionId = "local:${dir.name}",
+                    int8Available = File(dir, "model.int8.onnx").isFile(),
+                )
+            } else {
+                prefs().edit().remove("active_model_path").apply()
+            }
+        }
+
         // Known catalog locations first (plus legacy "kokoro" dir from earlier builds).
         for (opt in CATALOG) {
             val dir = dirFor(opt)
@@ -155,7 +202,11 @@ class ModelManager(private val context: Context) {
     }
 
     fun deleteModel() {
-        modelsRoot.listFiles { f -> f.isDirectory }?.forEach { it.deleteRecursively() }
+        val external = externalModelsRoot?.canonicalPath
+        modelsRoot.listFiles { f -> f.isDirectory }?.forEach { f ->
+            if (external == null || f.canonicalPath != external) f.deleteRecursively()
+        }
+        prefs().edit().remove("active_model_path").apply()
         _ui.value = detect()
     }
 

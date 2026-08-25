@@ -92,6 +92,49 @@ fun SettingsScreen() {
                         }
                     }
                 }
+                // ---- Drop-in bay: USB-loaded bundles ----
+                Spacer(Modifier.height(16.dp))
+                Text("Drop-in models (USB)", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                val locals = remember(modelUi.optionId) { container.models.listExternal() }
+                val activePath = modelUi.modelDir?.absolutePath
+                if (locals.isEmpty()) {
+                    Text(
+                        "None found. On a PC, copy a model folder into " +
+                            "Android/data/com.forge.audiobookforge/files/models/ — it needs a model .onnx, tokens.txt " +
+                            "(and voices.bin for multi-voice Kokoro-style engines). It appears here after reopening Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    locals.forEach { dir ->
+                        val isActive = activePath == dir.absolutePath
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(dir.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "drop-in bundle",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (isActive) Text(
+                                "Active",
+                                color = androidx.compose.ui.graphics.Color(0xFFFF5A1F),
+                                style = MaterialTheme.typography.labelLarge,
+                            ) else TextButton(onClick = {
+                                container.models.activateExternal(dir)
+                            }) { Text("Use") }
+                        }
+                    }
+                    if (modelUi.optionId?.startsWith("local:") != true) {
+                        TextButton(onClick = { container.models.useCatalog() }) { Text("Use downloaded model instead") }
+                    }
+                }
+
                 if (!modelUi.ready && modelUi.error != null) {
                     Text(modelUi.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }

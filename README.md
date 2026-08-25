@@ -74,6 +74,16 @@ both alternatives; Piper trades noticeable naturalness for ~2× more speed and a
 
 RTF = synthesis time ÷ audio duration; below 1.0 renders faster than realtime.
 
+## Drop-in models (no rebuild required)
+
+NightForge can run any sherpa-onnx offline TTS bundle you place on the device:
+
+1. On a PC, copy a model folder to `Android/data/com.forge.audiobookforge/files/models/<YourName>/` over USB
+2. Required contents: one model `.onnx`, `tokens.txt`, and for multi-voice Kokoro-style engines a `voices.bin`; `espeak-ng-data/` as shipped by upstream bundles
+3. Reopen Settings → **Drop-in models (USB)** → tap **Use**
+
+Same-family models (future Kokoro releases, other Piper voices, Matcha) drop straight in. Engines requiring *new native code* would need an app update — the inference library is versioned with the app.
+
 ## Roadmap
 
 - Single-file `.m4b` output with chapter markers (needs chpl-atom muxing)
