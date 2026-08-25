@@ -54,15 +54,20 @@ Multi-hour full-book renders, real EPUB content, per-chapter RTF tracked start t
 |---|---|---|---|
 | Kokoro 82M **fp32**, 6 threads, stock clocks | 0.51 | ~0.59–0.60 plateau | default recommendation |
 | Kokoro 82M **fp32**, 6 threads, perf mode | 0.44 | converges to ~0.59 | wins the first hour only |
+| Kokoro 82M **fp32**, **8 threads**, Night Forge mode | ~0.5 | **~0.62 flat at 1h+** | foreground-status fix defeats overnight throttling entirely |
 | Kokoro 82M int8, 6 threads | — | 0.7 → 1.7 spiral | ARM int8 kernels underperform |
 | Piper Lite int8 | ~0.30 | ~0.30 flat | thermally trivial; audibly flatter |
 
 **Findings worth stealing:**
 
-- **RTF is thermally bounded.** Stock and boosted clocks converge on the same
-  ~0.6 equilibrium on this chassis — higher clocks arrive sooner and pay it back
-  as heat soak. Mode choice is a *book-length* decision: short content finishes
-  inside perf mode's golden hour; overnight novels do the same job either way.
+- **RTF is thermally bounded — and scheduler-bounded.** Stock and boosted clocks
+  converge on the same ~0.6 equilibrium interactively. Unattended renders
+  previously collapsed to RTF 2.5+ (OEM governors revoke big cores from
+  background apps regardless of wake locks); **Night Forge mode** holds the app
+  foreground and eliminates the collapse: 8-thread sustained 0.62 at the one-hour
+  mark, no degradation.
+- **Mode choice is a book-length decision**: short content finishes inside perf
+  mode's golden hour; overnight novels do the same job either way.
 - **Quality is independent of speed.** Same model, same output bits at any RTF;
   faster rendering buys more books per night, not better ones.
 - On modern flagship ARM the fp32 model can be ~2× **faster** than its int8
