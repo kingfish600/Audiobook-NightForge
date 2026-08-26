@@ -52,10 +52,19 @@ object M4bExporter {
         val buf = ByteBuffer.allocateDirect(1 shl 20)
         val info = MediaCodec.BufferInfo()
         var track = -1
+        var textTrack = -1
         var baseUs = 0L
         val entries = ArrayList<Entry>(done.size)
 
         try {
+            // Apple-style chapter track (timed text): the universally-read
+            // chapter system. Titles are emitted as one text sample per
+            // chapter; ChapterBox wires it to the audio track via tref/chap
+            // after muxing, alongside the legacy Nero chpl.
+            val tfmt = MediaFormat()
+            tfmt.setString(MediaFormat.KEY_MIME, "text/3gpp-tt")
+            tfmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1 shl 20)
+
             for (ch in done) {
                 val src = File(audioDir, ch.audioFile!!)
                 val ex = MediaExtractor()
@@ -72,6 +81,7 @@ object M4bExporter {
                     check(audioIdx >= 0) { "No audio track in ${src.name}" }
                     if (track < 0) {
                         track = muxer.addTrack(fmt!!)
+                        textTrack = muxer.addTrack(tfmt)
                         muxer.start()
                     }
                     ex.selectTrack(audioIdx)
@@ -93,6 +103,17 @@ object M4bExporter {
                     }
                     val chapterLenUs = if (lastUs >= firstUs) (lastUs - firstUs) + 23_000 // ~one AAC frame slack
                                        else ch.durationMs * 1_000
+                    // Emit this chapter's title sample now (per-track order stays
+                    // monotonic; cross-track interleaving is the muxer's job).
+                    if (textTrack >= 0 && chapterLenUs > 0) {
+                        val titleBytes = ch.title.toByteArray(Charsets.UTF_8)
+                        val tb = ByteBuffer.allocateDirect(2 + titleBytes.size)
+                        tb.putShort(titleBytes.size.toShort())
+                        tb.put(titleBytes)
+                        tb.flip()
+                        info.set(0, tb.remaining(), chapterBase, MediaCodec.BUFFER_FLAG_KEY_FRAME)
+                        muxer.writeSampleData(textTrack, tb, info)
+                    }
                     baseUs += chapterLenUs
                     entries += Entry(ch.title, chapterBase / 1_000)
                 } finally {
@@ -110,6 +131,7 @@ object M4bExporter {
 
         val totalMs = baseUs / 1_000
         ChapterBox.writeChapters(tmp, entries, totalMs)
+        ChapterBox.injectChapReference(tmp)
         if (!tmp.renameTo(out)) {
             tmp.copyTo(out, overwrite = true)
             tmp.delete()
@@ -230,6 +252,152 @@ private object ChapterBox {
             raf.setLength(moovOff + newMoov.size)
         }
     }
+
+    /**
+     * Apple-style chapter wiring: finds the text track and the audio track in
+     * moov, then inserts tref[chap]=<textTrackId> inside the audio trak. This
+     * is the chapter system iTunes/iOS/every serious player reads; chpl alone
+     * proved insufficient in the wild (v0.6.x field reports).
+     */
+    fun injectChapReference(f: File) {
+        val moov = locateMoov(f) ?: error("chap ref: moov not found | len=${f.length()}")
+        val (moovOff, moovLen) = moov
+        check(moovOff + moovLen >= f.length()) { "moov not final atom (chap)" }
+
+        val bytes = readAt(f, moovOff, moovLen)
+        data class Trak(val index: Int, val bytes: ByteArray)
+        val traks = ArrayList<Pair<Int, ByteArray>>() // childIndex -> trak bytes
+        var p = 8
+        while (p + 8 <= bytes.size) {
+            val sz = readU32(bytes, p)
+            if (sz <= 0) break
+            val ty = String(bytes, p + 4, 4, Charsets.US_ASCII)
+            if (ty == "trak") traks += traks.size to bytes.copyOfRange(p, p + sz)
+            p += sz
+        }
+        check(traks.size >= 2) { "chap ref: expected 2 tracks" }
+
+        fun hdlrSubtype(trak: ByteArray): String? {
+            // walk children -> mdia -> children -> hdlr; subtype at offset 16..20 of hdlr payload
+            var q = 8
+            while (q + 8 <= trak.size) {
+                val sz = readU32(trak, q)
+                if (sz <= 0) break
+                if (String(trak, q + 4, 4, Charsets.US_ASCII) == "mdia") {
+                    val mdia = trak.copyOfRange(q, q + sz)
+                    var r = 8
+                    while (r + 8 <= mdia.size) {
+                        val msz = readU32(mdia, r)
+                        if (msz <= 0) break
+                        if (String(mdia, r + 4, 4, Charsets.US_ASCII) == "hdlr") {
+                            return String(mdia, r + 8 + 8, 4, Charsets.US_ASCII) // ver/flags(4)+pre_defined(4)
+                        }
+                        r += msz
+                    }
+                }
+                q += sz
+            }
+            return null
+        }
+
+        fun trackId(trak: ByteArray): Int {
+            var q = 8
+            while (q + 8 <= trak.size) {
+                val sz = readU32(trak, q)
+                if (sz <= 0) break
+                if (String(trak, q + 4, 4, Charsets.US_ASCII) == "tkhd") {
+                    val version = trak[q + 8].toInt()
+                    val idPos = q + 8 + 4 + (if (version == 1) 16 else 8)
+                    return readU32(trak, idPos)
+                }
+                q += sz
+            }
+            error("tkhd not found")
+        }
+
+        var audioIdx = -1; var textIdx = -1; var textId = -1
+        for ((i, trak) in traks) {
+            when (hdlrSubtype(trak)) {
+                "soun" -> audioIdx = i
+                "sbtl", "text", "subt" -> { textIdx = i; textId = trackId(trak) }
+            }
+        }
+        check(audioIdx >= 0 && textId > 0) { "chap ref: tracks not identified (audio=$audioIdx text=$textIdx id=$textId)" }
+
+        // Build tref box containing chap -> textId
+        val chapPayload = ByteArray(4)
+        writeU32(chapPayload, 0, textId)
+        val chap = box("chap", chapPayload)
+        val tref = box("tref", chap)
+
+        // Insert into audio trak right after tkhd
+        val audioBytes = traks.firstOrNull { it.first == audioIdx }!!.second
+        var q = 8; var insertAt = -1
+        while (q + 8 <= audioBytes.size) {
+            val sz = readU32(audioBytes, q); if (sz <= 0) break
+            if (String(audioBytes, q + 4, 4, Charsets.US_ASCII) == "tkhd") { insertAt = q + sz; break }
+            q += sz
+        }
+        check(insertAt > 0) { "audio tkhd not found for tref insert" }
+        val newTrak = ByteArray(audioBytes.size + tref.size)
+        audioBytes.copyInto(newTrak, 0, 0, insertAt)
+        tref.copyInto(newTrak, insertAt)
+        audioBytes.copyInto(newTrak, insertAt + tref.size, insertAt)
+        writeU32(newTrak, 0, newTrak.size)
+
+        // Rebuild moov with new audio trak
+        val out = java.io.ByteArrayOutputStream(bytes.size + tref.size + 16)
+        out.write(int32(0)); out.write("moov".toByteArray(Charsets.US_ASCII))
+        var c = 8
+        var i2 = 0
+        while (c + 8 <= bytes.size) {
+            val sz = readU32(bytes, c); if (sz <= 0) break
+            val ty = String(bytes, c + 4, 4, Charsets.US_ASCII)
+            if (ty == "trak" && i2++ == audioIdx) {
+                out.write(newTrak)
+            } else {
+                out.write(bytes, c, sz)
+            }
+            c += sz
+        }
+        val newMoov = out.toByteArray()
+        writeU32(newMoov, 0, newMoov.size)
+        java.io.RandomAccessFile(f, "rw").use { raf ->
+            raf.seek(moovOff); raf.write(newMoov); raf.setLength(moovOff + newMoov.size)
+        }
+
+        // Self-verify: 'chap' must now exist inside moov bytes on disk
+        val verify = readAt(f, moovOff, newMoov.size)
+        check(String(verify, Charsets.ISO_8859_1).contains("chap")) { "chap self-check failed" }
+    }
+
+    private fun locateMoov(f: File): Pair<Long, Int>? {
+        var moovOff = -1L; var moovLen = 0
+        val len = f.length()
+        java.io.RandomAccessFile(f, "r").use { raf ->
+            var off = 0L
+            while (off + 8 <= len) {
+                raf.seek(off)
+                val hdr = ByteArray(8).also { raf.readFully(it) }
+                var size = readU32(hdr, 0).toLong() and 0xFFFFFFFFL
+                val type = String(hdr, 4, 4, Charsets.US_ASCII)
+                if (size == 1L) {
+                    val lb = ByteArray(8).also { raf.readFully(it) }
+                    var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
+                    size = ls
+                } else if (size == 0L) size = len - off
+                if (type == "moov") { moovOff = off; moovLen = size.toInt() }
+                if (size < 8) break
+                off += size
+            }
+        }
+        return if (moovOff >= 0) moovOff to moovLen else null
+    }
+
+    private fun readAt(f: File, off: Long, len: Int): ByteArray =
+        java.io.RandomAccessFile(f, "r").use { raf ->
+            raf.seek(off); ByteArray(len).also { raf.readFully(it) }
+        }
 
     private fun mergeChildren(kids: List<Child>): ByteArray {
         var total = 8
