@@ -77,6 +77,7 @@ fun BookDetailScreen(bookId: String?) {
     val snackbar = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
     var pendingM4b by remember { mutableStateOf<java.io.File?>(null) }
+    var m4bExporting by remember { mutableStateOf(false) }
     val m4bLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("audio/x-m4b"),
     ) { uri ->
@@ -309,25 +310,58 @@ fun BookDetailScreen(bookId: String?) {
 
                                 Spacer(Modifier.height(8.dp))
                                 if (!com.forge.audiobookforge.audio.M4bExporter.requiresAac(book)) {
-                                    TextButton(
+                                    OutlinedButton(
+                                        enabled = !m4bExporting,
                                         onClick = {
+                                            if (m4bExporting) return@OutlinedButton // impatient taps become no-ops
+                                            m4bExporting = true
                                             snackbarScope.launch {
-                                                val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                    val tmp = java.io.File(context.cacheDir, "${book.title}.m4b")
-                                                    com.forge.audiobookforge.audio.M4bExporter.export(
-                                                        book,
-                                                        container.library.audioDir(book.id),
-                                                        tmp,
-                                                        appleChapters = container.settings.appleChapters.value,
+                                                try {
+                                                    val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        runCatching {
+                                                            val stamp = System.currentTimeMillis()
+                                                            val safeTitle = book.title
+                                                                .replace(Regex("[\\\\/:*?\"<>|\u0000-\u001F]"), "_")
+                                                                .trim().ifEmpty { "book" }
+                                                            val tmp = java.io.File(context.cacheDir, "$safeTitle-$stamp.m4b")
+                                                            com.forge.audiobookforge.audio.M4bExporter.export(
+                                                                book,
+                                                                container.library.audioDir(book.id),
+                                                                tmp,
+                                                                appleChapters = container.settings.appleChapters.value,
+                                                            ).also { check(it.file.exists()) { "bundle produced no file" } }
+                                                        }.getOrElse { t ->
+                                                            android.util.Log.e("NightForge", "m4b export failed", t)
+                                                            error("m4b export failed: ${t.message ?: t.javaClass.simpleName}")
+                                                        }
+                                                    }
+                                                    pendingM4b = res.file
+                                                    val suffix = if (res.chapters < book.chapters.size)
+                                                        ".Part${res.chapters}of${book.chapters.size}.m4b" else ".m4b"
+                                                    m4bLauncher.launch("${book.title}$suffix")
+                                                    snackbar.showSnackbar(
+                                                        if (res.chapters < book.chapters.size)
+                                                            "Partial bundle: ${res.chapters} of ${book.chapters.size} chapters"
+                                                        else "Full book bundled: ${res.chapters} chapters"
                                                     )
+                                                } catch (t: Throwable) {
+                                                    snackbar.showSnackbar(t.message ?: t.javaClass.simpleName)
+                                                } finally {
+                                                    m4bExporting = false
                                                 }
-                                                pendingM4b = res.file
-                                                m4bLauncher.launch("${book.title}.m4b")
-                                                snackbar.showSnackbar("Bundled ${res.chapters} chapters — choose where to save")
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth(),
-                                    ) { Text("Export single-file .m4b (with chapters)") }
+                                    ) {
+                                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                                        Text(
+                                            when {
+                                                m4bExporting -> "  Forging bundle…"
+                                                book.doneCount >= book.chapters.size -> " Export single-file .m4b (with chapters)"
+                                                else -> " Export .m4b — partial (${book.doneCount}/${book.chapters.size})"
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
