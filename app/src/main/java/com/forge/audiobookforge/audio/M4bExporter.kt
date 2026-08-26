@@ -81,7 +81,9 @@ object M4bExporter {
                     check(audioIdx >= 0) { "No audio track in ${src.name}" }
                     if (track < 0) {
                         track = muxer.addTrack(fmt!!)
-                        textTrack = muxer.addTrack(tfmt)
+                        // Vendor media stacks vary wildly on timed-text support;
+                        // some native-abort instead of throwing. Degrade, never die.
+                        textTrack = runCatching { muxer.addTrack(tfmt) }.getOrDefault(-1)
                         muxer.start()
                     }
                     ex.selectTrack(audioIdx)
@@ -112,7 +114,8 @@ object M4bExporter {
                         tb.put(titleBytes)
                         tb.flip()
                         info.set(0, tb.remaining(), chapterBase, MediaCodec.BUFFER_FLAG_KEY_FRAME)
-                        muxer.writeSampleData(textTrack, tb, info)
+                        val wrote = runCatching { muxer.writeSampleData(textTrack, tb, info) }.isSuccess
+                        if (!wrote) textTrack = -1 // first rejection disables the track for the rest of the bundle
                     }
                     baseUs += chapterLenUs
                     entries += Entry(ch.title, chapterBase / 1_000)
