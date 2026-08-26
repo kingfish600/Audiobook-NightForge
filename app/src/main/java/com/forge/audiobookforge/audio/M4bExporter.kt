@@ -245,7 +245,9 @@ private object ChapterBox {
             if (ty == "trak") traks += traks.size to bytes.copyOfRange(p, p + sz)
             p += sz
         }
-        check(traks.size >= 2) { "chap ref: expected 2 tracks" }
+        // Single-track output (text track rejected by this ROM, or user disabled
+        // Apple chapters): nothing to wire — chpl chapters are already present.
+        if (traks.size < 2) return
 
         fun hdlrSubtype(trak: ByteArray): String? {
             // walk children -> mdia -> children -> hdlr; subtype at offset 16..20 of hdlr payload
@@ -292,7 +294,9 @@ private object ChapterBox {
                 "sbtl", "text", "subt" -> { textIdx = i; textId = trackId(trak) }
             }
         }
-        check(audioIdx >= 0 && textId > 0) { "chap ref: tracks not identified (audio=$audioIdx text=$textIdx id=$textId)" }
+        // Unrecognized handler layout: ship without tref rather than fail.
+        // Nero chpl remains embedded for players that read it.
+        if (audioIdx < 0 || textIdx < 0 || textId <= 0) return
 
         // Build tref box containing chap -> textId
         val chapPayload = ByteArray(4)
