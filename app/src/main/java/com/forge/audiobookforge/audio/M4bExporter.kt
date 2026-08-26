@@ -158,43 +158,10 @@ private object ChapterBox {
         // because InputStream.skip() may legally skip FEWER bytes than requested,
         // silently desyncing the scan. On failure the exception carries the full
         // box layout + head hexdump so remote diagnosis needs zero guessing.
-        var moovOff = -1L
-        var moovLen = 0
-        val layout = ArrayList<String>()
-        val len = f.length()
-        java.io.RandomAccessFile(f, "r").use { raf ->
-            var off = 0L
-            while (off + 8 <= len) {
-                raf.seek(off)
-                val hdr = ByteArray(8).also { raf.readFully(it) }
-                var size = readU32(hdr, 0).toLong() and 0xFFFFFFFFL
-                val type = String(hdr, 4, 4, Charsets.US_ASCII)
-                if (size == 1L) {
-                    // 64-bit largesize box
-                    val lb = ByteArray(8).also { raf.readFully(it) }
-                    var ls = 0L
-                    for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
-                    size = ls
-                } else if (size == 0L) {
-                    size = len - off // extends to EOF
-                }
-                layout.add("$type@$off+$size")
-                if (type == "moov") {
-                    check(size <= Int.MAX_VALUE) { "moov too large (>2GB)" }
-                    moovOff = off
-                    moovLen = size.toInt()
-                }
-                if (size < 8) break // malformed; avoid infinite loop
-                off += size
-            }
-        }
-        if (moovOff < 0) {
-            val head = ByteArray(48)
-            java.io.RandomAccessFile(f, "r").use { raf -> raf.seek(0); raf.readFully(head) }
-            val hex = head.joinToString("") { b -> "%02x".format(b) }
-            error("moov atom not found | len=$len | boxes=${layout.joinToString(",")} | head=$hex")
-        }
-        check(moovOff + moovLen >= len) { "moov is not the final atom — refusing to edit" }
+        val (moovOff, moovLen) = locateMoovRobust(f)
+        // moov located by signature + arithmetic proof against EOF; upstream box
+        // corruption (this ROM's unfinalized mdat largesize) is irrelevant.
+        check(moovOff + moovLen >= f.length()) { "moov is not the final atom — refusing to edit" }
         check(moovLen < Int.MAX_VALUE) { "moov too large (>2GB) for safe editing" }
 
         val moov = f.inputStream().use { ins ->
@@ -374,27 +341,55 @@ private object ChapterBox {
         check(String(verify, Charsets.ISO_8859_1).contains("chap")) { "chap self-check failed" }
     }
 
-    private fun locateMoov(f: File): Pair<Long, Int>? {
-        var moovOff = -1L; var moovLen = 0
+    private fun locateMoov(f: File): Pair<Long, Int>? =
+        runCatching { locateMoovRobust(f) }.getOrNull()
+
+    /**
+     * Finds the FINAL moov atom by scanning raw bytes for the signature and
+     * requiring boxStart + declaredSize == fileSize. Immune to any corruption
+     * in earlier boxes (observed on RedMagic: mdat largesize left unfinalized).
+     */
+    private fun locateMoovRobust(f: File): Pair<Long, Int> {
         val len = f.length()
+        check(len in 17..Int.MAX_VALUE) { "bad size for edit: $len" }
+        val candidates = LinkedHashSet<Long>()
         java.io.RandomAccessFile(f, "r").use { raf ->
-            var off = 0L
-            while (off + 8 <= len) {
-                raf.seek(off)
-                val hdr = ByteArray(8).also { raf.readFully(it) }
-                var size = readU32(hdr, 0).toLong() and 0xFFFFFFFFL
-                val type = String(hdr, 4, 4, Charsets.US_ASCII)
-                if (size == 1L) {
-                    val lb = ByteArray(8).also { raf.readFully(it) }
-                    var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
-                    size = ls
-                } else if (size == 0L) size = len - off
-                if (type == "moov") { moovOff = off; moovLen = size.toInt() }
-                if (size < 8) break
-                off += size
+            val chunk = 1 shl 20
+            val overlap = 8
+            var carry = ByteArray(0)
+            var base = 0L
+            while (base < len) {
+                val sz = minOf(chunk.toLong(), len - base).toInt()
+                val buf = ByteArray(sz).also { raf.seek(base); raf.readFully(it) }
+                val hay = carry + buf
+                var i = 0
+                while (i + 4 <= hay.size) {
+                    if (hay[i] == 'm'.code.toByte() && hay[i + 1] == 'o'.code.toByte() &&
+                        hay[i + 2] == 'o'.code.toByte() && hay[i + 3] == 'v'.code.toByte()) {
+                        val boxStart = base - carry.size + i - 4
+                        if (boxStart >= 0) candidates.add(boxStart)
+                    }
+                    i++
+                }
+                carry = hay.copyOfRange(hay.size - overlap, hay.size)
+                base += sz
             }
         }
-        return if (moovOff >= 0) moovOff to moovLen else null
+        for (bs in candidates.reversed()) { // final atom most likely last candidate
+            java.io.RandomAccessFile(f, "r").use { raf ->
+                raf.seek(bs)
+                val hdr = ByteArray(8).also { raf.readFully(it) }
+                val s32 = readU32(hdr, 0)
+                if (s32 == 1) {
+                    val lb = ByteArray(8).also { raf.readFully(it) }
+                    var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
+                    if (ls == len - bs && ls <= Int.MAX_VALUE) return bs to ls.toInt()
+                } else if (s32 > 8 && bs + s32 == len) {
+                    return bs to s32
+                }
+            }
+        }
+        error("no moov candidate terminates at EOF | len=$len | candidates=${candidates.size}")
     }
 
     private fun readAt(f: File, off: Long, len: Int): ByteArray =
