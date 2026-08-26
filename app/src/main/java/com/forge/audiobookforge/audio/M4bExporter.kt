@@ -32,7 +32,7 @@ object M4bExporter {
                     (it.audioFile == null || !it.audioFile!!.endsWith(".m4a", true))
             }
 
-    fun export(book: Book, audioDir: File, out: File): Result {
+    fun export(book: Book, audioDir: File, out: File, appleChapters: Boolean = true): Result {
         val done = book.chapters.filter {
             it.status == com.forge.audiobookforge.data.model.ChapterStatus.DONE && it.audioFile != null
         }.sortedBy { it.index }
@@ -83,7 +83,7 @@ object M4bExporter {
                         track = muxer.addTrack(fmt!!)
                         // Vendor media stacks vary wildly on timed-text support;
                         // some native-abort instead of throwing. Degrade, never die.
-                        textTrack = runCatching { muxer.addTrack(tfmt) }.getOrDefault(-1)
+                        textTrack = if (appleChapters) runCatching { muxer.addTrack(tfmt) }.getOrDefault(-1) else -1
                         muxer.start()
                     }
                     ex.selectTrack(audioIdx)

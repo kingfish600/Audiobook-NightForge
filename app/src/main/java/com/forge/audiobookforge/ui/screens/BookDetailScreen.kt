@@ -318,6 +318,7 @@ fun BookDetailScreen(bookId: String?) {
                                                         book,
                                                         container.library.audioDir(book.id),
                                                         tmp,
+                                                        appleChapters = container.settings.appleChapters.value,
                                                     )
                                                 }
                                                 pendingM4b = res.file

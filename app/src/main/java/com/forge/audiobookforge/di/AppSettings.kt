@@ -18,6 +18,13 @@ class AppSettings(context: Context) {
     private val _preferInt8 = MutableStateFlow(prefs.getBoolean(KEY_INT8, true))
     val preferInt8: StateFlow<Boolean> = _preferInt8.asStateFlow()
 
+    // Apple-style chapter track in single-file .m4b exports. Some vendor media
+    // stacks native-abort on timed-text tracks (uncatchable), so users can force
+    // legacy-chapters-only. Default: on.
+    private val _appleChapters = MutableStateFlow(prefs.getBoolean(KEY_APPLE_CHAPTERS, true))
+    val appleChapters: StateFlow<Boolean> = _appleChapters.asStateFlow()
+    fun setAppleChapters(v: Boolean) { prefs.edit().putBoolean(KEY_APPLE_CHAPTERS, v).apply(); _appleChapters.value = v }
+
     private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, false))
     val requireCharging: StateFlow<Boolean> = _requireCharging.asStateFlow()
 
@@ -66,5 +73,6 @@ class AppSettings(context: Context) {
         const val KEY_EXPORT_TREE = "export_tree_uri"
         const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"   // legacy boolean, migrated
         const val KEY_FORGE_SCREEN = "forge_screen"
+        const val KEY_APPLE_CHAPTERS = "apple_chapters"
     }
 }

@@ -94,6 +94,23 @@ fun SettingsScreen() {
                 }
                 // ---- Drop-in bay: USB-loaded bundles ----
                 Spacer(Modifier.height(16.dp))
+                val appleChapters by container.settings.appleChapters.collectAsState()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Apple-style chapter track (.m4b)", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Adds a hidden timed-text chapter system to single-file exports. If single-file export crashes on your device, turn this off — exports then use legacy chapters only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = appleChapters, onCheckedChange = { container.settings.setAppleChapters(it) })
+                }
+
+                Spacer(Modifier.height(16.dp))
                 Text("Drop-in models (USB)", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 val locals = remember(modelUi.optionId) { container.models.listExternal() }
