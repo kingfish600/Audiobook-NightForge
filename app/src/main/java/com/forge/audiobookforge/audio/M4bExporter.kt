@@ -155,8 +155,12 @@ object M4bExporter {
         if (textTrack >= 0) {
             ChapterBox.injectChapReference(tmp)
             appleOk = true
+        } else if (appleChapters) {
+            // ROM refused a real text track: hand-build one post-mux.
+            ChapterBox.buildAppleChapterTrack(tmp, entries, totalMs)
+            appleOk = true
+            appleRefused = false
         }
-        // textTrack<0 here => refused at addTrack time (appleRefused already set)
         if (!tmp.renameTo(out)) {
             tmp.copyTo(out, overwrite = true)
             tmp.delete()
@@ -365,6 +369,226 @@ private object ChapterBox {
         // Self-verify: 'chap' must now exist inside moov bytes on disk
         val verify = readAt(f, moovOff, newMoov.size)
         check(String(verify, Charsets.ISO_8859_1).contains("chap")) { "chap self-check failed" }
+    }
+
+    /**
+     * Hand-built Apple chapter track for devices whose MediaMuxer refuses
+     * timed-text tracks (RedMagic et al.). Constructs a complete QuickTime
+     * text trak byte-by-byte after muxing: tkhd/mdia(mdhd/hdlr/minf/stbl)
+     * with per-chapter stts/stsz/stco, appends the sample chunk before moov,
+     * wires tref[chap] from the audio trak, and rewrites moov last.
+     */
+    fun buildAppleChapterTrack(f: File, entries: List<M4bExporter.Entry>, totalMs: Long) {
+        if (entries.isEmpty()) return
+        val (moovOff, moovLen) = locateMoovRobust(f)
+        val bytes = readAt(f, moovOff, moovLen)
+
+        // --- gather references from existing tree ---
+        var mvhdTs = 1000
+        var p = 8
+        val children = ArrayList<Pair<String, ByteArray>>() // (type, fullBoxBytes)
+        while (p + 8 <= bytes.size) {
+            val sz = readU32(bytes, p); if (sz <= 0) break
+            val ty = String(bytes, p + 4, 4, Charsets.US_ASCII)
+            children += ty to bytes.copyOfRange(p, p + sz)
+            if (ty == "mvhd") {
+                val ver = bytes[p + 8].toInt()
+                mvhdTs = readU32(bytes, p + 8 + 4 + (if (ver == 1) 16 else 8))
+                if (mvhdTs <= 0) mvhdTs = 1000
+            }
+            p += sz
+        }
+
+        fun findTrakById(id: Int): ByteArray? {
+            for ((ty, bb) in children) if (ty == "trak") {
+                var q = 8
+                while (q + 8 <= bb.size) {
+                    val sz = readU32(bb, q); if (sz <= 0) break
+                    if (String(bb, q + 4, 4, Charsets.US_ASCII) == "tkhd") {
+                        val ver = bb[q + 8].toInt()
+                        val tid = readU32(bb, q + 8 + 4 + (if (ver == 1) 16 else 8))
+                        if (tid == id) return bb
+                    }
+                    q += sz
+                }
+            }
+            return null
+        }
+        fun trakId(bb: ByteArray): Int {
+            var q = 8
+            while (q + 8 <= bb.size) {
+                val sz = readU32(bb, q); if (sz <= 0) break
+                if (String(bb, q + 4, 4, Charsets.US_ASCII) == "tkhd") {
+                    val ver = bb[q + 8].toInt()
+                    return readU32(bb, q + 8 + 4 + (if (ver == 1) 16 else 8))
+                }
+                q += sz
+            }
+            error("trak without tkhd")
+        }
+        var audioTrakIdx = -1
+        var audioId = -1
+        children.forEachIndexed { idx, (ty, bb) ->
+            if (ty == "trak" && audioTrakIdx < 0 && hdlrSubtypeOf(bb) == "soun") {
+                audioTrakIdx = idx
+                audioId = trakId(bb)
+            }
+        }
+        check(audioTrakIdx >= 0) { "apple build: audio trak missing" }
+
+        val textId = audioId + 1
+        val movieDur = (totalMs * mvhdTs / 1000L).coerceAtLeast(1)
+
+        // --- compose text trak ---
+        fun u32(v: Int) = int32(v)
+        fun box(ty: String, payload: ByteArray): ByteArray =
+            ByteArray(8 + payload.size).also { arr ->
+                writeU32(arr, 0, arr.size)
+                ty.toByteArray(Charsets.US_ASCII).copyInto(arr, 4)
+                payload.copyInto(arr, 8)
+            }
+
+        val chunkData = java.io.ByteArrayOutputStream()
+        val sizes = IntArray(entries.size)
+        val deltas = LongArray(entries.size)
+        for (i in entries.indices) {
+            val title = entries[i].title.toByteArray(Charsets.UTF_8).take(255)
+            chunkData.write((title.size shr 8) and 0xFF)
+            chunkData.write(title.size and 0xFF)
+            chunkData.write(title.toByteArray())
+            sizes[i] = 2 + title.size
+            val nextStart = entries.getOrNull(i + 1)?.startMs ?: totalMs
+            deltas[i] = (nextStart - entries[i].startMs).coerceAtLeast(1)
+        }
+        val chunk = chunkData.toByteArray()
+
+        val verFlags0 = byteArrayOf(0, 0, 0, 0)
+        val tkhdPayload = run {
+            val out = java.io.ByteArrayOutputStream()
+            out.write(byteArrayOf(0, 0, 0, 3)) // version 0, flags enabled|in_movie
+            out.write(u32(0)); out.write(u32(0))          // creation, modification
+            out.write(u32(textId)); out.write(u32(0))     // track_ID, reserved
+            out.write(u32(movieDur.toInt()))              // duration (movie timescale)
+            out.write(ByteArray(8))                       // reserved
+            out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(0, 1)) // layer, alt group
+            out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(0, 0)) // volume 0, reserved
+            val matrix = intArrayOf(0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000)
+            matrix.forEach { out.write(u32(it)) }
+            out.write(u32(0)); out.write(u32(0))          // width, height
+            out.toByteArray()
+        }
+        val tkhd = box("tkhd", tkhdPayload)
+
+        val trefChap = box("tref", box("chap", u32(textId)))
+        val audioTrakOriginal = children[audioTrakIdx].second
+        val audioTrakWired = run {
+            var q = 8; var insAt = -1
+            while (q + 8 <= audioTrakOriginal.size) {
+                val sz = readU32(audioTrakOriginal, q); if (sz <= 0) break
+                if (String(audioTrakOriginal, q + 4, 4, Charsets.US_ASCII) == "tkhd") { insAt = q + sz; break }
+                q += sz
+            }
+            check(insAt > 0) { "audio tkhd missing for tref" }
+            val nt = ByteArray(audioTrakOriginal.size + trefChap.size)
+            audioTrakOriginal.copyInto(nt, 0, 0, insAt)
+            trefChap.copyInto(nt, insAt)
+            audioTrakOriginal.copyInto(nt, insAt + trefChap.size, insAt)
+            writeU32(nt, 0, nt.size)
+            nt
+        }
+
+        val mdhd = box("mdhd", verFlags0 +
+            u32(0) + u32(0) + u32(1000) + u32(totalMs.coerceAtLeast(1).toInt()) +
+            byteArrayOf(0x55.toByte(), 0xC4.toByte()) + byteArrayOf(0, 0))
+        val hdlrName = "chapter".toByteArray(Charsets.US_ASCII)
+        val hdlr = box("hdlr", verFlags0 + u32(0) +
+            "text".toByteArray(Charsets.US_ASCII) + ByteArray(12) + hdlrName)
+        val urlBar = box("url ", byteArrayOf(0, 0, 0, 1)) // self-contained
+        val dref = box("dref", verFlags0 + u32(1) + urlBar)
+        val dinf = box("dinf", dref)
+        val textEntry = box("text", ByteArray(6) + byteArrayOf(0, 1)) // SampleEntry: reserved + dataRefIndex
+        val stsd = box("stsd", verFlags0 + u32(1) + textEntry)
+        val sttsBody = java.io.ByteArrayOutputStream().let { o ->
+            o.write(verFlags0); o.write(u32(entries.size))
+            deltas.forEach { o.write(u32(it.toInt())) }
+            o.toByteArray()
+        }
+        val stts = box("stts", sttsBody)
+        val stsc = box("stsc", verFlags0 + u32(1) + u32(1) + u32(entries.size) + u32(1))
+        val stszBody = java.io.ByteArrayOutputStream().let { o ->
+            o.write(verFlags0); o.write(u32(0)); o.write(u32(entries.size))
+            sizes.forEach { o.write(u32(it)) }
+            o.toByteArray()
+        }
+        val stsz = box("stsz", stszBody)
+        val stco = box("stco", verFlags0 + u32(1) + u32(0)) // offset patched after placement
+        val stbl = box("stbl", stsd + stts + stsc + stsz + stco)
+        val minf = box("minf", box("nmhd", verFlags0) + dinf + stbl)
+        val mdia = box("mdia", mdhd + hdlr + minf)
+        val textTrak = box("trak", tkhd + mdia)
+
+        // --- assemble new moov: wired audio trak + inserted text trak ---
+        val out = java.io.ByteArrayOutputStream(bytes.size + textTrak.size + trefChap.size + 16)
+        out.write(int32(0)); out.write("moov".toByteArray(Charsets.US_ASCII))
+        children.forEachIndexed { idx, (ty, bb) ->
+            if (idx == audioTrakIdx) {
+                out.write(audioTrakWired)
+                out.write(textTrak)
+            } else {
+                out.write(bb)
+            }
+        }
+        val newMoovPre = out.toByteArray() // stco placeholder inside
+
+        // Place chunk immediately before moov; patch stco within newMoov buffer.
+        val chunkOffset = moovOff
+        // find stco payload inside textTrak within newMoovPre: search for marker
+        val marker = "stco".toByteArray(Charsets.US_ASCII)
+        var sp = -1
+        var i2 = 0
+        while (i2 + 4 <= newMoovPre.size - 4) {
+            if (newMoovPre[i2] == marker[0] && newMoovPre[i2 + 1] == marker[1] &&
+                newMoovPre[i2 + 2] == marker[2] && newMoovPre[i2 + 3] == marker[3]) { sp = i2; break }
+            i2++
+        }
+        check(sp > 0) { "stco lost during assembly" }
+        // stco layout: box starts sp-4(size).. ; payload offset entries begin at sp+4+4(verflags)+4(count)
+        val offPos = sp + 4 + 4 + 4
+        writeU32(newMoovPre, offPos, chunkOffset.toInt())
+        writeU32(newMoovPre, 0, newMoovPre.size)
+
+        java.io.RandomAccessFile(f, "rw").use { raf ->
+            raf.seek(chunkOffset)
+            raf.write(chunk)
+            raf.seek(chunkOffset + chunk.size)
+            raf.write(newMoovPre)
+            raf.setLength(chunkOffset + chunk.size + newMoovPre.size)
+        }
+
+        // Self-verify: text trak + chap present on disk
+        val checkBytes = readAt(f, chunkOffset + chunk.size, newMoovPre.size)
+        val txt = String(checkBytes, Charsets.ISO_8859_1)
+        check(txt.contains("chap") && txt.contains("text")) { "apple self-check failed" }
+    }
+
+    private fun hdlrSubtypeOf(trak: ByteArray): String? {
+        var q = 8
+        while (q + 8 <= trak.size) {
+            val sz = readU32(trak, q); if (sz <= 0) break
+            if (String(trak, q + 4, 4, Charsets.US_ASCII) == "mdia") {
+                val mdia = trak.copyOfRange(q, q + sz)
+                var r = 8
+                while (r + 8 <= mdia.size) {
+                    val msz = readU32(mdia, r); if (msz <= 0) break
+                    if (String(mdia, r + 4, 4, Charsets.US_ASCII) == "hdlr") {
+                        return String(mdia, r + 16, 4, Charsets.US_ASCII)
+                    }
+                    r += msz
+                }
+            }
+            q += sz
+        }
+        return null
     }
 
     private fun locateMoov(f: File): Pair<Long, Int>? =
