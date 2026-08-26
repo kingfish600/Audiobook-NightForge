@@ -21,7 +21,7 @@ class AppSettings(context: Context) {
     // Apple-style chapter track in single-file .m4b exports. Some vendor media
     // stacks native-abort on timed-text tracks (uncatchable), so users can force
     // legacy-chapters-only. Default: on.
-    private val _appleChapters = MutableStateFlow(prefs.getBoolean(KEY_APPLE_CHAPTERS, true))
+    private val _appleChapters = MutableStateFlow(prefs.getBoolean(KEY_APPLE_CHAPTERS, false))
     val appleChapters: StateFlow<Boolean> = _appleChapters.asStateFlow()
     fun setAppleChapters(v: Boolean) { prefs.edit().putBoolean(KEY_APPLE_CHAPTERS, v).apply(); _appleChapters.value = v }
 

@@ -102,7 +102,7 @@ fun SettingsScreen() {
                     Column(Modifier.weight(1f)) {
                         Text("Apple-style chapter track (.m4b)", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Adds a hidden timed-text chapter system to single-file exports. If single-file export crashes on your device, turn this off — exports then use legacy chapters only.",
+                            "Off by default: exports embed Nero chapters (widely readable). On devices whose muxer supports timed text, enabling this also writes the Apple-style chapter track some players require. If export misbehaves with it on, switch back off.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

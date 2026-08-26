@@ -97,7 +97,7 @@ Same-family models (future Kokoro releases, other Piper voices, Matcha) drop str
 
 ## Roadmap
 
-- Single-file `.m4b` output ✅ shipped in v0.6.0 — lossless AAC remux of all chapters into one file with Nero `chpl` chapter atoms; per-chapter files remain untouched (AAC books only — Opus/WAV stay chaptered)
+- Single-file `.m4b` output ✅ shipped in v0.6.0 — lossless AAC remux of all chapters into one file; per-chapter files remain untouched (AAC books only). Chapter visibility depends on device muxer + player: Apple-style tracks are written when the device supports them (Settings toggle, off by default); Nero `chpl` atoms are always embedded.
 - ~~PDF input~~ ✅ shipped in v0.3.0 (born-digital text via PdfBox-Android)
 - Per-chapter parallelism / NNAPI execution provider experiments
 - Export/share rendered books ✅ covered for audiobook players via the v0.6.0 single-file .m4b export (imports into Smart AudioBook Player, Listen, Voice, etc.)
