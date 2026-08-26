@@ -23,7 +23,20 @@ object M4bExporter {
 
     data class Entry(val title: String, val startMs: Long)
 
-    data class Result(val file: File, val chapters: Int, val durationMs: Long)
+    data class Result(
+        val file: File,
+        val chapters: Int,
+        val durationMs: Long,
+        val neroChpl: Boolean = false,
+        val appleWired: Boolean = false,
+        val appleRefusedByDevice: Boolean = false,
+    ) { val anatomy: String get() =
+        "chapters embedded — Nero:" + (if (neroChpl) "yes" else "no") +
+        " · Apple:" + when {
+            appleWired -> "wired"
+            appleRefusedByDevice -> "refused by device"
+            else -> "off"
+        } }
 
     fun requiresAac(book: Book): Boolean =
         book.chapters.any { it.status == com.forge.audiobookforge.data.model.ChapterStatus.DONE } &&
@@ -33,6 +46,9 @@ object M4bExporter {
             }
 
     fun export(book: Book, audioDir: File, out: File, appleChapters: Boolean = true): Result {
+        var neroOk = false
+        var appleOk = false
+        var appleRefused = false
         val done = book.chapters.filter {
             it.status == com.forge.audiobookforge.data.model.ChapterStatus.DONE && it.audioFile != null
         }.sortedBy { it.index }
@@ -84,6 +100,7 @@ object M4bExporter {
                         // Vendor media stacks vary wildly on timed-text support;
                         // some native-abort instead of throwing. Degrade, never die.
                         textTrack = if (appleChapters) runCatching { muxer.addTrack(tfmt) }.getOrDefault(-1) else -1
+                        if (textTrack < 0 && appleChapters) appleRefused = true
                         muxer.start()
                     }
                     ex.selectTrack(audioIdx)
@@ -134,12 +151,17 @@ object M4bExporter {
 
         val totalMs = baseUs / 1_000
         ChapterBox.writeChapters(tmp, entries, totalMs)
-        ChapterBox.injectChapReference(tmp)
+        neroOk = ChapterBox.verifyChpl(tmp)
+        if (textTrack >= 0) {
+            ChapterBox.injectChapReference(tmp)
+            appleOk = true
+        }
+        // textTrack<0 here => refused at addTrack time (appleRefused already set)
         if (!tmp.renameTo(out)) {
             tmp.copyTo(out, overwrite = true)
             tmp.delete()
         }
-        return Result(out, entries.size, totalMs)
+        return Result(out, entries.size, totalMs, neroOk, appleOk, appleRefused)
     }
 }
 
@@ -400,6 +422,12 @@ private object ChapterBox {
         java.io.RandomAccessFile(f, "r").use { raf ->
             raf.seek(off); ByteArray(len).also { raf.readFully(it) }
         }
+
+    /** Cheap proof that our chpl survived on disk under moov/udta. */
+    fun verifyChpl(f: File): Boolean = runCatching {
+        val (off, lenB) = locateMoovRobust(f)
+        String(readAt(f, off, lenB), Charsets.ISO_8859_1).contains("chpl")
+    }.getOrDefault(false)
 
     private fun mergeChildren(kids: List<Child>): ByteArray {
         var total = 8

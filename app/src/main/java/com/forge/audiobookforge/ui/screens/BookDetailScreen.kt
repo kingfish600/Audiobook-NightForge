@@ -340,9 +340,10 @@ fun BookDetailScreen(bookId: String?) {
                                                         ".Part${res.chapters}of${book.chapters.size}.m4b" else ".m4b"
                                                     m4bLauncher.launch("${book.title}$suffix")
                                                     snackbar.showSnackbar(
-                                                        if (res.chapters < book.chapters.size)
-                                                            "Partial bundle: ${res.chapters} of ${book.chapters.size} chapters"
-                                                        else "Full book bundled: ${res.chapters} chapters"
+                                                        (if (res.chapters < book.chapters.size)
+                                                            "Partial bundle: ${res.chapters}/${book.chapters.size}"
+                                                        else "Full book bundled: ${res.chapters} chapters") +
+                                                        " · " + res.anatomy
                                                     )
                                                 } catch (t: Throwable) {
                                                     snackbar.showSnackbar(t.message ?: t.javaClass.simpleName)
