@@ -257,8 +257,10 @@ fun BookDetailScreen(bookId: String?) {
                             ) { Icon(Icons.Filled.Pause, contentDescription = "Stop forging"); Text("  Stop forging") }
                         }
                         modelUi.ready -> {
+                            val bookComplete = book.chapters.isNotEmpty() &&
+                                book.chapters.all { it.status == com.forge.audiobookforge.data.model.ChapterStatus.DONE }
                             Button(
-                                enabled = runningElsewhere == null,
+                                enabled = runningElsewhere == null && !bookComplete,
                                 onClick = {
                                     ConversionWorker.enqueue(context, bookId!!, requireCharging = settings)
                                 if (container.settings.forgeScreen.value == "night") {
@@ -275,7 +277,13 @@ fun BookDetailScreen(bookId: String?) {
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = "Start forging")
-                                Text(if (book.doneCount > 0) "  Continue forging" else "  Forge audiobook")
+                                Text(
+                                    when {
+                                        bookComplete -> "  All chapters forged ✓"
+                                        book.doneCount > 0 -> "  Continue forging"
+                                        else -> "  Forge audiobook"
+                                    }
+                                )
                             }
                             if (book.doneCount > 0) {
                                 Spacer(Modifier.height(8.dp))
