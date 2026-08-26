@@ -470,7 +470,7 @@ private object ChapterBox {
             out.write(u32(textId)); out.write(u32(0))     // track_ID, reserved
             out.write(u32(movieDur.toInt()))              // duration (movie timescale)
             out.write(ByteArray(8))                       // reserved
-            out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(0, 1)) // layer, alt group
+            out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(0, 0)) // layer 0, alt group 0 (not an alternate of the audio)
             out.write(byteArrayOf(0, 0)); out.write(byteArrayOf(0, 0)) // volume 0, reserved
             val matrix = intArrayOf(0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000)
             matrix.forEach { out.write(u32(it)) }
@@ -509,8 +509,10 @@ private object ChapterBox {
         val textEntry = box("text", ByteArray(6) + byteArrayOf(0, 1)) // SampleEntry: reserved + dataRefIndex
         val stsd = box("stsd", verFlags0 + u32(1) + textEntry)
         val sttsBody = java.io.ByteArrayOutputStream().let { o ->
+            // Each stts entry is [sampleCount, sampleDelta]; one distinct
+            // delta per sample keeps the table trivially correct.
             o.write(verFlags0); o.write(u32(entries.size))
-            deltas.forEach { o.write(u32(it.toInt())) }
+            deltas.forEach { o.write(u32(1)); o.write(u32(it.toInt())) }
             o.toByteArray()
         }
         val stts = box("stts", sttsBody)
