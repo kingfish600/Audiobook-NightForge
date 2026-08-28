@@ -1,3 +1,8 @@
+/*
+ * Vendored from sherpa-onnx (https://github.com/k2-fsa/sherpa-onnx)
+ * Licensed under Apache-2.0. Pinned to v1.13.6; built from source for
+ * F-Droid compliance — see ARCHITECTURE.md / docs.
+ */
 // Copyright (c)  2023  Xiaomi Corporation
 package com.k2fsa.sherpa.onnx
 
