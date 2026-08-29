@@ -287,6 +287,20 @@ class ModelManager(private val context: Context) {
                 url = PIPER_MEDIUM_INT8_URL,
                 kind = EngineKind.VITS,
             ),
+            ModelOption(
+                id = "piper-nl-ronnie",
+                title = "Piper Dutch · ronnie int8",
+                subtitle = "Dutch (nl_NL) voice, VITS · ≈21 MB",
+                url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-nl_NL-ronnie-medium-int8.tar.bz2",
+                kind = EngineKind.VITS,
+            ),
+            ModelOption(
+                id = "piper-nl-pim",
+                title = "Piper Dutch · pim int8",
+                subtitle = "Dutch (nl_NL) voice, VITS · ≈21 MB",
+                url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-nl_NL-pim-medium-int8.tar.bz2",
+                kind = EngineKind.VITS,
+            ),
         )
     }
 }
