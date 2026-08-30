@@ -1,0 +1,1 @@
+Slimmed the app by 4.9 MB: removed two native libraries the app never loads.

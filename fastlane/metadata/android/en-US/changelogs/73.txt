@@ -1,0 +1,1 @@
+Fixed chapter track sample table (strict players no longer flag exports as corrupt).

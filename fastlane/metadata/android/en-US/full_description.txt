@@ -1,0 +1,16 @@
+Audiobook NightForge converts EPUB, TXT and PDF books into audiobooks entirely on your device.
+
+FORGING
+Pick a book, pick a voice, press Forge. Chapters are rendered one by one by an on-device neural TTS engine (sherpa-onnx with Kokoro or Piper voices). No account, no upload, no telemetry: your book never leaves the phone. Overnight rendering is supported: Night Forge mode keeps the screen dark and steady while chapters render.
+
+PLAYBACK
+Built-in chaptered player (Media3): remembers position per chapter, background playback, and a full-screen Night Forge player for bedtime listening.
+
+EXPORT
+Keep per-chapter audio files, or export the whole book as a single .m4b with chapter atoms. AAC, Opus and WAV outputs are supported per book.
+
+VOICES
+Kokoro 82M (multilingual, best quality) and Piper VITS voices are offered in the in-app model catalog, including Dutch voices. Advanced users can drop in any compatible sherpa-onnx voice bundle via USB (Settings → Drop-in models).
+
+F-DROID NOTES
+Fully open source (MIT), no ads, no analytics, no network permission beyond downloading the voice models you choose.

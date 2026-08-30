@@ -1,0 +1,1 @@
+Export hardening: every .m4b failure mode now shows an informative message instead of crashing; concurrent taps locked out; filename sanitization; forge button retires on completed books.

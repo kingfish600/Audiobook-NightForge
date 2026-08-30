@@ -1,0 +1,1 @@
+Dutch TTS voices added to the model catalog (Piper nl_NL "ronnie" and "pim", int8). First community feature request — thanks @PDerid!

@@ -1,0 +1,1 @@
+Reliability-first chapters: Apple-style track only on devices that support it natively (off by default); Nero chapters always embedded; mixed-format books explained clearly.

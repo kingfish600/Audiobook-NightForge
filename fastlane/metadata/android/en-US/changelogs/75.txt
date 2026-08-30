@@ -1,0 +1,1 @@
+Build system cleanup for F-Droid: portable Gradle properties, committed Gradle wrapper, vendored library attribution.
