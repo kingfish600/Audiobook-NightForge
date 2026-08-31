@@ -20,6 +20,19 @@ import java.io.File
 class KokoroEngine {
 
     private var tts: OfflineTts? = null
+
+    // Retired-but-resident engines. sherpa-onnx's native stack (espeak-ng
+    // phonemization globals) cannot survive a native release + re-create
+    // cycle inside one process: the second init SIGSEGVs (device-proven).
+    // So engine swaps RETIRE the old instance instead of freeing it; it
+    // stays resident until process death or the explicit Free-memory hook.
+    private val retired = ArrayList<OfflineTts>()
+
+    // Set once any native engine has actually been freed. Further loads
+    // are refused with a friendly message instead of risking the crash.
+    @Volatile
+    private var poisoned = false
+
     var loadedDir: File? = null; private set
     var kind: ModelManager.EngineKind? = null; private set
     val isLoaded: Boolean get() = tts != null
@@ -31,7 +44,9 @@ class KokoroEngine {
     @Synchronized
     fun load(modelDir: File, numThreads: Int = 4, preferInt8: Boolean = true): String? {
         if (tts != null && loadedDir == modelDir) return null
-        release()
+        if (poisoned) {
+            return "Engine resources were freed to save RAM — restart the app to load a model."
+        }
         val family = ModelManager.bundleKind(modelDir)
             ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
         val modelFile = chooseModelFile(modelDir, preferInt8)
@@ -98,15 +113,28 @@ class KokoroEngine {
                 // Batch more sentences per internal pass — fewer vocoder invocations.
                 maxNumSentences = 3,
             )
-            tts = OfflineTts(assetManager = null, config = config)
+            val created = OfflineTts(assetManager = null, config = config)
+            // Adopt BEFORE freeing anything: the new engine is live, the old
+            // one is retired (kept resident), never torn down mid-process.
+            tts?.let { old -> retired.add(old); trimRetired() }
+            tts = created
             loadedDir = modelDir
             kind = family
             null
         } catch (t: Throwable) {
-            tts = null
-            loadedDir = null
-            kind = null
+            // Init failed: the previous engine (if any) is untouched — the
+            // user is never left without TTS.
             "Engine init failed: ${t.message ?: t.javaClass.simpleName}"
+        }
+    }
+
+    private fun trimRetired() {
+        // At most two retired engines stay resident (covers the small
+        // models). Past that we must free something — and any native free
+        // poisons the process: later loads ask for a restart, no crash.
+        while (retired.size > 2) {
+            runCatching { retired.removeAt(0).release() }
+            poisoned = true
         }
     }
 
@@ -114,13 +142,22 @@ class KokoroEngine {
 
     fun numSpeakers(): Int = try { tts?.numSpeakers() ?: 0 } catch (_: Throwable) { 0 }
 
+    @Synchronized
     fun synthesize(text: String, sid: Int, speed: Float): GeneratedAudio? =
         tts?.generate(text = text, sid = sid, speed = speed)
 
+    /**
+     * Terminal. Frees ALL native engines (active + retired). Because a
+     * native release + re-create cycle crashes the process, the instance
+     * is poisoned afterwards: load() refuses with a friendly restart hint.
+     */
     @Synchronized
     fun release() {
         runCatching { tts?.release() }
         tts = null
+        retired.forEach { runCatching { it.release() } }
+        retired.clear()
+        poisoned = true
         loadedDir = null
         kind = null
     }

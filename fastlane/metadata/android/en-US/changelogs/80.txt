@@ -1,0 +1,5 @@
+Stability fix:
+- App could crash when switching TTS engines, previewing a voice, or right after a book finished rendering
+- Root cause: the native TTS engine cannot be torn down and re-created inside one app run
+- Engines now stay warm in memory when you switch; Settings -> Free memory releases them (then restart the app to load another model)
+- Consecutive book renders now start faster (engine stays loaded)

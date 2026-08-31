@@ -152,7 +152,9 @@ class ConversionWorker(
         } finally {
             runCatching { if (wakeLock.isHeld) wakeLock.release() }
             runCatching { if (screenLock?.isHeld == true) screenLock.release() }
-            engine.release()
+            // engine.release() REMOVED: the engine singleton is shared with
+            // previews, and a native release poisons the process (a later
+            // load would SIGSEGV). The engine stays warm for the next render.
             controller.endRun(runId)
             NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_ID)
         }
