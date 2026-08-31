@@ -52,9 +52,7 @@ class KokoroEngine {
             if (loadedDir == modelDir) return null
             // One engine per process (upstream constraint). The choice is
             // already persisted by ModelManager; a restart picks it up.
-            return "Switching engines needs an app restart — your choice is " +
-                "saved. Close and reopen ${"NightForge"} to use " +
-                "${modelDir.name}."
+            return RESTART_MSG + modelDir.name + "."
         }
         val family = ModelManager.bundleKind(modelDir)
             ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
@@ -156,6 +154,14 @@ class KokoroEngine {
     }
 
     companion object {
+        /** Prefix of the engine-switch message — callers detect it to offer
+         *  the automatic apply-and-restart. */
+        const val RESTART_MSG =
+            "Switching engines needs an app restart — your choice is saved. " +
+                "Close and reopen NightForge to use "
+        fun isRestartNeeded(message: String?): Boolean =
+            message?.startsWith(RESTART_MSG) == true
+
         fun chooseModelFile(modelDir: File, preferInt8: Boolean): File? {
             val int8 = File(modelDir, "model.int8.onnx")
             val full = File(modelDir, "model.onnx")

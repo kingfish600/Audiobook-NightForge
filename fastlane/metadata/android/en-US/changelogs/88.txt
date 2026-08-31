@@ -1,0 +1,1 @@
+Fix: the engine-switch restart no longer crashes. The 'Applying new engine — restarting…' notice was shown from a background thread, which Android forbids — it now posts to the main thread, so the switch completes cleanly: app restarts itself, no error dialog.

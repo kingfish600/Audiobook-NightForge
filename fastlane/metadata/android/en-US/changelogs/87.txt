@@ -1,0 +1,4 @@
+Fix: switching engines now truly applies.
+- Swiping the app away does not actually stop it — Android kept the old engine alive in the background, so a new model never loaded
+- After downloading a different engine, NightForge exits and relaunches itself automatically ("Applying new engine — restarting…")
+- The fresh start loads the new engine, every time

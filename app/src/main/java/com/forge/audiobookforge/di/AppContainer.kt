@@ -28,7 +28,23 @@ class AppContainer(private val context: Context) : ContainerApi {
     override suspend fun previewVoice(book: Book): String? = withContext(Dispatchers.IO) {
         val modelDir = models.ui.value.modelDir
             ?: return@withContext "Download the voice model first (Library screen)."
-        kokoroEngine.load(modelDir, settings.numThreads.value)?.let { return@withContext it }
+        val loadError = kokoroEngine.load(modelDir, settings.numThreads.value)
+        if (loadError != null && com.forge.audiobookforge.tts.KokoroEngine.isRestartNeeded(loadError)) {
+            // The new engine is already the saved choice, but the old one is
+            // still loaded in THIS process (swiping away never kills it).
+            // Apply for real: exit + relaunch. The fresh process loads it.
+            // Toasts MUST be shown on a Looper thread — previewVoice runs on
+            // Dispatchers.IO; showing directly here crashes the process.
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(
+                    context, "Applying new engine — restarting NightForge…",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+            Thread { Thread.sleep(1200); AppRestart.restart(context) }.start()
+            return@withContext null
+        }
+        loadError?.let { return@withContext it }
 
         val speakers = kokoroEngine.numSpeakers()
         val sid = if (speakers > 0) book.voiceSid.coerceIn(0, speakers - 1) else book.voiceSid
