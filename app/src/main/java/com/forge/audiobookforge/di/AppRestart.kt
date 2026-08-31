@@ -23,7 +23,11 @@ object AppRestart {
             PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        am.setExact(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 100, pi)
+        // set() (inexact) needs no SCHEDULE_EXACT_ALARM permission — Android 14+
+        // denies that by default and setExact would throw, leaving the app dead
+        // with no relaunch. An inexact alarm fires within moments; that is all
+        // the 100 ms bounce needs.
+        am.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 100, pi)
         Runtime.getRuntime().exit(0)
     }
 }

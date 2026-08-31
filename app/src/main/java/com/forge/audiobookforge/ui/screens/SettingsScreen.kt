@@ -97,7 +97,7 @@ fun SettingsScreen() {
                         when {
                             active -> Text(
                                 "Active",
-                                color = MaterialTheme.colorScheme.primary,
+                                color = androidx.compose.ui.graphics.Color(0xFF2E9E4F),
                                 style = MaterialTheme.typography.labelLarge,
                             )
                             installed -> TextButton(

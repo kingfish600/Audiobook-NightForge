@@ -1,0 +1,3 @@
+Fixes:
+- Engine switch relaunch could fail to come back on newer Android (exact-alarm permission denied) — the app now always relaunches after switching
+- The active engine now shows a green Active label
