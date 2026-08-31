@@ -1,0 +1,1 @@
+Fix: tapping Activate could force-close the app on some devices. The restart is now fully guarded — if an automatic relaunch cannot happen, the app tells you and your choice is still saved.
