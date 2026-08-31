@@ -1,0 +1,5 @@
+Stability fix:
+- Switching TTS engines could crash the app or produce broken audio
+- Upstream engine limitation: only one TTS engine can run per app session
+- Switching engines now asks you to restart the app; your choice is saved and used after reopening
+- Book renders start faster because the engine stays loaded between renders

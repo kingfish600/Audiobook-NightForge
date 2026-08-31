@@ -16,20 +16,22 @@ import java.io.File
  *  - VITS (Piper): model(.int8).onnx + tokens.txt (+ optional espeak-ng-data)
  * The native session is created once and reused for every chunk of a book
  * (re-creating it per utterance is the classic cause of "laggy" TTS).
+ *
+ * UPSTREAM CONSTRAINT (desktop-proven on sherpa-onnx 1.13.6, the same native
+ * version this app ships): exactly ONE OfflineTts may exist per process.
+ *  - release + re-create  -> native crash (device-proven SIGSEGV)
+ *  - two engines resident -> second engine's InitFrontend kills the process
+ * Therefore: one engine per process lifetime. Switching engines requires an
+ * app restart; the chosen engine is persisted first so the restart picks it
+ * up. Nothing here frees a native engine implicitly.
  */
 class KokoroEngine {
 
     private var tts: OfflineTts? = null
 
-    // Retired-but-resident engines. sherpa-onnx's native stack (espeak-ng
-    // phonemization globals) cannot survive a native release + re-create
-    // cycle inside one process: the second init SIGSEGVs (device-proven).
-    // So engine swaps RETIRE the old instance instead of freeing it; it
-    // stays resident until process death or the explicit Free-memory hook.
-    private val retired = ArrayList<OfflineTts>()
-
-    // Set once any native engine has actually been freed. Further loads
-    // are refused with a friendly message instead of risking the crash.
+    // Set once the native engine has been freed (Free-memory hook). Further
+    // loads are refused with a friendly message: re-creating a native engine
+    // in the same process is not supported by sherpa-onnx.
     @Volatile
     private var poisoned = false
 
@@ -43,9 +45,16 @@ class KokoroEngine {
      */
     @Synchronized
     fun load(modelDir: File, numThreads: Int = 4, preferInt8: Boolean = true): String? {
-        if (tts != null && loadedDir == modelDir) return null
         if (poisoned) {
             return "Engine resources were freed to save RAM — restart the app to load a model."
+        }
+        if (tts != null) {
+            if (loadedDir == modelDir) return null
+            // One engine per process (upstream constraint). The choice is
+            // already persisted by ModelManager; a restart picks it up.
+            return "Switching engines needs an app restart — your choice is " +
+                "saved. Close and reopen ${"NightForge"} to use " +
+                "${modelDir.name}."
         }
         val family = ModelManager.bundleKind(modelDir)
             ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
@@ -113,11 +122,7 @@ class KokoroEngine {
                 // Batch more sentences per internal pass — fewer vocoder invocations.
                 maxNumSentences = 3,
             )
-            val created = OfflineTts(assetManager = null, config = config)
-            // Adopt BEFORE freeing anything: the new engine is live, the old
-            // one is retired (kept resident), never torn down mid-process.
-            tts?.let { old -> retired.add(old); trimRetired() }
-            tts = created
+            tts = OfflineTts(assetManager = null, config = config)
             loadedDir = modelDir
             kind = family
             null
@@ -125,16 +130,6 @@ class KokoroEngine {
             // Init failed: the previous engine (if any) is untouched — the
             // user is never left without TTS.
             "Engine init failed: ${t.message ?: t.javaClass.simpleName}"
-        }
-    }
-
-    private fun trimRetired() {
-        // At most two retired engines stay resident (covers the small
-        // models). Past that we must free something — and any native free
-        // poisons the process: later loads ask for a restart, no crash.
-        while (retired.size > 2) {
-            runCatching { retired.removeAt(0).release() }
-            poisoned = true
         }
     }
 
@@ -147,7 +142,7 @@ class KokoroEngine {
         tts?.generate(text = text, sid = sid, speed = speed)
 
     /**
-     * Terminal. Frees ALL native engines (active + retired). Because a
+     * Terminal. Frees the native engine. Because a
      * native release + re-create cycle crashes the process, the instance
      * is poisoned afterwards: load() refuses with a friendly restart hint.
      */
@@ -155,8 +150,6 @@ class KokoroEngine {
     fun release() {
         runCatching { tts?.release() }
         tts = null
-        retired.forEach { runCatching { it.release() } }
-        retired.clear()
         poisoned = true
         loadedDir = null
         kind = null
