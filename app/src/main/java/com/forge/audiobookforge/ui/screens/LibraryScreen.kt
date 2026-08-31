@@ -24,7 +24,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -75,7 +74,7 @@ fun LibraryScreen(onOpenBook: (String) -> Unit) {
                     importLauncher.launch(arrayOf("application/epub+zip", "text/plain", "application/pdf", "application/octet-stream"))
                 },
                 icon = { Icon(Icons.Filled.Add, contentDescription = "Add a book") },
-                text = { Text("Import EPUB / TXT") },
+                text = { Text("Import EPUB / TXT / PDF") },
             )
         },
     ) { padding ->
@@ -198,7 +197,7 @@ private fun ModelBanner() {
             Text(
                 "Before any book can be rendered, download a voice model once. " +
                     "It lives inside the app afterwards — no internet needed from then on. " +
-                    "The Lite engine is smaller and faster; the standard one sounds better.",
+                    "The recommended engine is best quality. More voices (Lite, Piper, Dutch) live in Settings.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -209,22 +208,9 @@ private fun ModelBanner() {
             Spacer(Modifier.height(10.dp))
             Button(
                 enabled = !modelUi.downloading,
-                onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[1]) } },
+                onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG.first { it.id == "kokoro-fp32" }) } },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Recommended: Kokoro full precision · ≈440 MB") }
-            Spacer(Modifier.height(6.dp))
-            OutlinedButton(
-                enabled = !modelUi.downloading,
-                onClick = { scope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[2]) } },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Lite version for modest phones · ≈30 MB") }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Both sound great — full precision renders fastest on modern flagship chips; " +
-                    "the smaller int8 variant lives in Settings.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

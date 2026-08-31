@@ -34,7 +34,6 @@ fun SettingsScreen() {
     val container = LocalAppContainer.current
     val scope = rememberCoroutineScope()
     val threads by container.settings.numThreads.collectAsState()
-    val int8 by container.settings.preferInt8.collectAsState()
     val charging by container.settings.requireCharging.collectAsState()
     val modelUi by container.models.ui.collectAsState()
 
@@ -92,65 +91,6 @@ fun SettingsScreen() {
                         }
                     }
                 }
-                // ---- Drop-in bay: USB-loaded bundles ----
-                Spacer(Modifier.height(16.dp))
-                val appleChapters by container.settings.appleChapters.collectAsState()
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Apple-style chapter track (.m4b)", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Off by default: exports embed Nero chapters (widely readable). On devices whose muxer supports timed text, enabling this also writes the Apple-style chapter track some players require. If export misbehaves with it on, switch back off.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = appleChapters, onCheckedChange = { container.settings.setAppleChapters(it) })
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Text("Drop-in models (USB)", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                val locals = remember(modelUi.optionId) { container.models.listExternal() }
-                val activePath = modelUi.modelDir?.absolutePath
-                if (locals.isEmpty()) {
-                    Text(
-                        "None found. On a PC, copy a model folder into " +
-                            "Android/data/com.forge.audiobookforge/files/models/ — it needs a model .onnx, tokens.txt " +
-                            "(and voices.bin for multi-voice Kokoro-style engines). It appears here after reopening Settings.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    locals.forEach { dir ->
-                        val isActive = activePath == dir.absolutePath
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(dir.name, style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    "drop-in bundle",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (isActive) Text(
-                                "Active",
-                                color = androidx.compose.ui.graphics.Color(0xFFFF5A1F),
-                                style = MaterialTheme.typography.labelLarge,
-                            ) else TextButton(onClick = {
-                                container.models.activateExternal(dir)
-                            }) { Text("Use") }
-                        }
-                    }
-                    if (modelUi.optionId?.startsWith("local:") != true) {
-                        TextButton(onClick = { container.models.useCatalog() }) { Text("Use downloaded model instead") }
-                    }
-                }
 
                 if (!modelUi.ready && modelUi.error != null) {
                     Text(modelUi.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -206,11 +146,6 @@ fun SettingsScreen() {
                     steps = 13,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = int8, onCheckedChange = { container.settings.setPreferInt8(it) })
-                    Spacer(Modifier.padding(start = 8.dp))
-                    Text("Prefer int8 weights (smaller download; often *slower* than full on flagship chips)")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = charging, onCheckedChange = { container.settings.setRequireCharging(it) })
                     Spacer(Modifier.padding(start = 8.dp))
                     Text("Forge only while charging (pauses when unplugged)")
@@ -235,22 +170,6 @@ fun SettingsScreen() {
                     )
                     Spacer(Modifier.padding(start = 8.dp))
                     androidx.compose.material3.FilterChip(
-                        selected = forgeScreen == "day",
-                        onClick = { container.settings.setForgeScreen("day") },
-                        label = { Text("☀ Day view") },
-                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            containerColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFF33190A)
-                                             else MaterialTheme.colorScheme.surface,
-                            labelColor = if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
-                                         else MaterialTheme.colorScheme.onSurface,
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            2.dp, if (forgeScreen == "day") androidx.compose.ui.graphics.Color(0xFFFF5A1F)
-                                  else MaterialTheme.colorScheme.outline,
-                        ),
-                    )
-                    Spacer(Modifier.padding(start = 8.dp))
-                    androidx.compose.material3.FilterChip(
                         selected = forgeScreen == "night",
                         onClick = { container.settings.setForgeScreen("night") },
                         label = { Text("🌙 Night forge") },
@@ -269,7 +188,6 @@ fun SettingsScreen() {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     when (forgeScreen) {
-                        "day" -> "Day view: screen stays on at normal brightness while forging — watch rings fill and listen. App must stay in front; best while charging."
                         "night" -> "Night forge: a black fullscreen view holds foreground status so performance clocks persist overnight. Set brightness low first."
                         else -> "Off: no screen handling — background runs may be clock-throttled by your device."
                     },
@@ -317,7 +235,7 @@ fun SettingsScreen() {
                     androidx.compose.material3.FilterChip(
                         selected = codec == "wav",
                         onClick = { container.settings.setCodec("wav") },
-                        label = { Text("WAV · lossless") },
+                        label = { Text("WAV") },
                         colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
                             containerColor = if (codec == "wav") androidx.compose.ui.graphics.Color(0xFF33190A)
                                              else MaterialTheme.colorScheme.surface,

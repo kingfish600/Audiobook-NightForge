@@ -34,7 +34,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -168,32 +167,6 @@ fun BookDetailScreen(bookId: String?) {
                         valueRange = 0.5f..2.0f,
                     )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = settings,
-                            onCheckedChange = { v ->
-                                container.settings.setRequireCharging(v)
-                                // Apply immediately: if THIS book is rendering right now,
-                                // restart its job under the new constraint. Finished
-                                // chapters are kept; only the in-flight chapter redoes.
-                                val st = conversion
-                                if (st is ConversionState.Running && st.bookId == book.id) {
-                                    ConversionWorker.enqueue(context, book.id, requireCharging = v)
-                                    snackbarScope.launch {
-                                        snackbar.showSnackbar(
-                                            if (v) "Resuming under charging-only — will pause when unplugged"
-                                            else "Resuming without the charging requirement"
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Forge only while charging",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
                     Text(
                         "Each chapter is forged in the background while you go about your day — or overnight. Keep it plugged in for best results.",
                         style = MaterialTheme.typography.bodySmall,
@@ -374,7 +347,7 @@ fun BookDetailScreen(bookId: String?) {
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 enabled = !modelUi.downloading,
-                                onClick = { snackbarScope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG[1]) } },
+                                onClick = { snackbarScope.launch { container.models.download(com.forge.audiobookforge.tts.ModelManager.CATALOG.first { it.id == "kokoro-fp32" }) } },
                                 modifier = Modifier.fillMaxWidth(),
                             ) { Text("Download voice model (≈440 MB)") }
                             if (modelUi.downloading) {

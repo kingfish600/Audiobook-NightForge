@@ -35,7 +35,7 @@ fun ForgeRoot() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Audiobook Forge") },
+                title = { Text("Audiobook NightForge") },
                 navigationIcon = {
                     Icon(
                         Icons.Filled.MenuBook,
