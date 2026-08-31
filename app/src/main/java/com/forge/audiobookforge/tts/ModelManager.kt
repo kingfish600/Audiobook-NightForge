@@ -35,6 +35,7 @@ class ModelManager(private val context: Context) {
         val modelDir: File? = null,
         val optionId: String? = null,
         val int8Available: Boolean = false,
+        val installedIds: List<String> = emptyList(),
         val downloading: Boolean = false,
         val progress: Float = 0f,
         val indeterminate: Boolean = false,
@@ -77,16 +78,29 @@ class ModelManager(private val context: Context) {
     private val _ui = MutableStateFlow(detect())
     val ui: StateFlow<ModelUi> = _ui.asStateFlow()
 
+    /** Storage location for a catalog engine (exposes dirFor for the UI). */
+    fun catalogDir(option: ModelOption): File = dirFor(option)
+
+    /** Point the active choice at an already-installed catalog engine. */
+    fun activateCatalog(option: ModelOption) {
+        prefs().edit().putString("active_model_path", dirFor(option).absolutePath).apply()
+        _ui.value = detect()
+    }
+
     fun detect(): ModelUi {
+        val installed = CATALOG.filter { isValidBundle(dirFor(it)) }.map { it.id }
+
         // 1. Explicit user choice wins if still valid (drop-in or catalog path).
         prefs().getString("active_model_path", null)?.let { path ->
             val dir = File(path)
             if (isValidBundle(dir)) {
+                val catalogOpt = CATALOG.firstOrNull { dirFor(it) == dir }
                 return ModelUi(
                     ready = true,
                     modelDir = dir,
-                    optionId = "local:${dir.name}",
+                    optionId = catalogOpt?.id ?: "local:${dir.name}",
                     int8Available = File(dir, "model.int8.onnx").isFile(),
+                    installedIds = installed,
                 )
             } else {
                 prefs().edit().remove("active_model_path").apply()
@@ -102,6 +116,7 @@ class ModelManager(private val context: Context) {
                     modelDir = dir,
                     optionId = opt.id,
                     int8Available = File(dir, "model.int8.onnx").isFile(),
+                    installedIds = installed,
                 )
             }
         }
@@ -113,6 +128,7 @@ class ModelManager(private val context: Context) {
             modelDir = any,
             optionId = null,
             int8Available = any != null && File(any, "model.int8.onnx").isFile(),
+            installedIds = installed,
         )
     }
 
@@ -170,17 +186,16 @@ class ModelManager(private val context: Context) {
                     "your previous model is untouched."
             }
 
-            // Verified: now enforce one-model-at-a-time.
-            CATALOG.filter { it.id != option.id }.forEach { other ->
-                File(modelsRoot, other.id).deleteRecursively()
-            }
-            if (option.id != "kokoro") File(modelsRoot, "kokoro").deleteRecursively()
+            // Multi-engine model bay: engines coexist on disk (storage only —
+            // the engine runtime still allows one per process). The freshly
+            // installed engine becomes the active choice immediately.
+            prefs().edit().putString("active_model_path", target.absolutePath).apply()
 
             val detected = detect()
             update {
                 detected.copy(
                     phaseLabel = "Ready",
-                    notice = "${option.title} installed — previous model removed",
+                    notice = "${option.title} installed and activated",
                 )
             }
         } catch (t: Throwable) {

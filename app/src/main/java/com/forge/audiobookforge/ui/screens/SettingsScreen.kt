@@ -36,6 +36,20 @@ fun SettingsScreen() {
     val threads by container.settings.numThreads.collectAsState()
     val charging by container.settings.requireCharging.collectAsState()
     val modelUi by container.models.ui.collectAsState()
+    val ctx = LocalContext.current
+
+    fun confirmActivate(opt: com.forge.audiobookforge.tts.ModelManager.ModelOption) {
+        val engine = container.kokoroEngine
+        val loaded = engine.loadedDir
+        val needsRestart = loaded != null && loaded != container.models.catalogDir(opt)
+        if (!needsRestart) {
+            container.models.activateCatalog(opt)
+            return
+        }
+        // Engine already warm with a different model: save choice + relaunch.
+        container.models.activateCatalog(opt)
+        com.forge.audiobookforge.di.AppRestart.restart(ctx)
+    }
 
     Column(
         Modifier
@@ -66,7 +80,6 @@ fun SettingsScreen() {
                 }
                 Spacer(Modifier.height(8.dp))
                 com.forge.audiobookforge.tts.ModelManager.CATALOG.forEach { opt ->
-                    val installed = modelUi.optionId == opt.id
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -79,12 +92,17 @@ fun SettingsScreen() {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        val active = modelUi.optionId == opt.id
+                        val installed = opt.id in modelUi.installedIds
                         when {
-                            installed -> Text(
-                                "Installed",
+                            active -> Text(
+                                "Active",
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelLarge,
                             )
+                            installed -> TextButton(
+                                onClick = { confirmActivate(opt) },
+                            ) { Text("Activate") }
                             !modelUi.downloading -> TextButton(
                                 onClick = { scope.launch { container.models.download(opt) } },
                             ) { Text("Get") }
