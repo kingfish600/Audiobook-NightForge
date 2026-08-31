@@ -79,6 +79,16 @@ fun SettingsScreen() {
                     )
                 }
                 Spacer(Modifier.height(8.dp))
+                if (modelUi.diagnostics.isNotEmpty()) {
+                    Text(
+                        modelUi.diagnostics,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { container.models.resetEngineChoice() }) {
+                        Text("Reset engine choice")
+                    }
+                }
                 com.forge.audiobookforge.tts.ModelManager.CATALOG.forEach { opt ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

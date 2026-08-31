@@ -36,6 +36,7 @@ class ModelManager(private val context: Context) {
         val optionId: String? = null,
         val int8Available: Boolean = false,
         val installedIds: List<String> = emptyList(),
+        val diagnostics: String = "",
         val downloading: Boolean = false,
         val progress: Float = 0f,
         val indeterminate: Boolean = false,
@@ -87,6 +88,29 @@ class ModelManager(private val context: Context) {
         _ui.value = detect()
     }
 
+    /** Clears ONLY the saved engine choice — files are never touched. The
+     *  next detect() auto-picks the first healthy catalog engine. Recovery
+     *  for a poisoned active_model_path. */
+    fun resetEngineChoice() {
+        prefs().edit().remove("active_model_path").apply()
+        _ui.value = detect()
+    }
+
+    /** Human-readable bay status for the Settings diagnostics panel. */
+    fun bayDiagnostics(): String {
+        val active = prefs().getString("active_model_path", null) ?: "(none — auto)"
+        val sb = StringBuilder()
+        sb.appendLine("Saved choice: $active")
+        for (opt in CATALOG) {
+            val d = dirFor(opt)
+            val ok = isValidBundle(d)
+            val sizeMb = if (d.isDirectory) d.walkTopDown().filter { it.isFile }
+                .map { it.length() }.sum() / 1_000_000 else 0
+            sb.appendLine("${opt.id}: ${if (ok) "OK" else "BROKEN/missing"} ($sizeMb MB) -> ${d.absolutePath}")
+        }
+        return sb.toString()
+    }
+
     fun detect(): ModelUi {
         val installed = CATALOG.filter { isValidBundle(dirFor(it)) }.map { it.id }
 
@@ -96,6 +120,7 @@ class ModelManager(private val context: Context) {
             if (isValidBundle(dir)) {
                 val catalogOpt = CATALOG.firstOrNull { dirFor(it) == dir }
                 return ModelUi(
+                    diagnostics = bayDiagnostics(),
                     ready = true,
                     modelDir = dir,
                     optionId = catalogOpt?.id ?: "local:${dir.name}",
@@ -112,6 +137,7 @@ class ModelManager(private val context: Context) {
             val dir = dirFor(opt)
             if (isValidBundle(dir)) {
                 return ModelUi(
+                    diagnostics = bayDiagnostics(),
                     ready = true,
                     modelDir = dir,
                     optionId = opt.id,
@@ -124,6 +150,7 @@ class ModelManager(private val context: Context) {
         val any = modelsRoot.listFiles { f -> f.isDirectory }
             ?.firstOrNull { isValidBundle(it) }
         return ModelUi(
+            diagnostics = bayDiagnostics(),
             ready = any != null,
             modelDir = any,
             optionId = null,

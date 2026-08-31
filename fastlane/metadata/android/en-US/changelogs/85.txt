@@ -1,0 +1,4 @@
+Rescue build:
+- New bay status readout in Settings (shows every engine: OK/BROKEN, size, location)
+- New 'Reset engine choice' button — clears only the saved engine choice, never your books or models
+- Use it if switching engines or previews stop working after an update
