@@ -1,0 +1,7 @@
+Voice engine upgrades:
+- Kitten nano (25M params, Apache-2.0, English) joins the catalog
+- Engines now listed best-first: Kokoro full precision leads
+- Starting screen: one Recommended engine; all voices in Settings
+- Cleaner Settings: Day view, Apple-track toggle, drop-in section and int8 option removed
+- Import chip now shows PDF
+- In-app name corrected to Audiobook NightForge
