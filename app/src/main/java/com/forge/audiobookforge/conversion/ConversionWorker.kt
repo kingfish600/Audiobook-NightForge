@@ -81,7 +81,7 @@ class ConversionWorker(
             controller.fail("Kokoro model is not installed.", book.id)
             return@withContext Result.failure()
         }
-        val loadError = engine.load(modelDir, settings.numThreads.value, settings.preferInt8.value)
+        val loadError = engine.load(modelDir, settings.numThreads.value)
         if (loadError != null) {
             log("engine load FAILED: $loadError")
             controller.fail(loadError, book.id)

@@ -15,9 +15,6 @@ class AppSettings(context: Context) {
     private val _numThreads = MutableStateFlow(prefs.getInt(KEY_THREADS, 4))
     val numThreads: StateFlow<Int> = _numThreads.asStateFlow()
 
-    private val _preferInt8 = MutableStateFlow(prefs.getBoolean(KEY_INT8, true))
-    val preferInt8: StateFlow<Boolean> = _preferInt8.asStateFlow()
-
     // Apple-style chapter track in single-file .m4b exports. Some vendor media
     // stacks native-abort on timed-text tracks (uncatchable), so users can force
     // legacy-chapters-only. Default: on.
@@ -48,7 +45,6 @@ class AppSettings(context: Context) {
     val exportTreeUri: StateFlow<String?> = _exportTreeUri.asStateFlow()
 
     fun setNumThreads(v: Int) { prefs.edit().putInt(KEY_THREADS, v).apply(); _numThreads.value = v }
-    fun setPreferInt8(v: Boolean) { prefs.edit().putBoolean(KEY_INT8, v).apply(); _preferInt8.value = v }
     fun setRequireCharging(v: Boolean) { prefs.edit().putBoolean(KEY_CHARGING, v).apply(); _requireCharging.value = v }
     fun setCodec(v: String) { prefs.edit().putString(KEY_CODEC, v).apply(); _codec.value = v }
     fun setForgeScreen(v: String) {
@@ -66,7 +62,6 @@ class AppSettings(context: Context) {
 
     companion object {
         const val KEY_THREADS = "num_threads"
-        const val KEY_INT8 = "prefer_int8"
         const val KEY_CHARGING = "require_charging"
         const val KEY_SEGMENT = "segment_chars"
         const val KEY_CODEC = "audio_codec"

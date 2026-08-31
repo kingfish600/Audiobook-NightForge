@@ -3,6 +3,7 @@ package com.forge.audiobookforge.tts
 import com.k2fsa.sherpa.onnx.GeneratedAudio
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
@@ -31,6 +32,8 @@ class KokoroEngine {
     fun load(modelDir: File, numThreads: Int = 4, preferInt8: Boolean = true): String? {
         if (tts != null && loadedDir == modelDir) return null
         release()
+        val family = ModelManager.bundleKind(modelDir)
+            ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
         val modelFile = chooseModelFile(modelDir, preferInt8)
             ?: return "No model.int8.onnx or model.onnx found in ${modelDir.absolutePath}"
         val tokens = File(modelDir, "tokens.txt")
@@ -38,9 +41,7 @@ class KokoroEngine {
 
         val voices = File(modelDir, "voices.bin")
         val espeak = File(modelDir, "espeak-ng-data")
-        val detectedKind =
-            if (voices.isFile) ModelManager.EngineKind.KOKORO else ModelManager.EngineKind.VITS
-        if (detectedKind == ModelManager.EngineKind.KOKORO && !espeak.isDirectory) {
+        if (family == ModelManager.EngineKind.KOKORO && !espeak.isDirectory) {
             return "Kokoro bundle is missing espeak-ng-data/"
         }
 
@@ -52,40 +53,54 @@ class KokoroEngine {
             val ruleFsts = modelDir.listFiles { f -> f.isFile && f.name.endsWith(".fst") }
                 ?.sortedBy { it.name }?.joinToString(",") { it.absolutePath } ?: ""
 
-            val config = OfflineTtsConfig(
-                model = OfflineTtsModelConfig(
-                    kokoro = if (detectedKind == ModelManager.EngineKind.KOKORO) {
-                        OfflineTtsKokoroModelConfig(
-                            model = modelFile.absolutePath,
-                            voices = voices.absolutePath,
-                            tokens = tokens.absolutePath,
-                            dataDir = espeak.absolutePath,
-                            lexicon = lexiconFiles.joinToString(",") { it.absolutePath },
-                            dictDir = dictDir,
-                        )
-                    } else {
-                        OfflineTtsKokoroModelConfig()
-                    },
-                    vits = if (detectedKind == ModelManager.EngineKind.VITS) {
-                        OfflineTtsVitsModelConfig(
-                            model = modelFile.absolutePath,
-                            tokens = tokens.absolutePath,
-                            dataDir = if (espeak.isDirectory) espeak.absolutePath else "",
-                        )
-                    } else {
-                        OfflineTtsVitsModelConfig()
-                    },
+            val modelConfig = when (family) {
+                ModelManager.EngineKind.KOKORO -> OfflineTtsModelConfig(
+                    kokoro = OfflineTtsKokoroModelConfig(
+                        model = modelFile.absolutePath,
+                        voices = voices.absolutePath,
+                        tokens = tokens.absolutePath,
+                        dataDir = espeak.absolutePath,
+                        lexicon = lexiconFiles.joinToString(",") { it.absolutePath },
+                        dictDir = dictDir,
+                    ),
                     numThreads = numThreads,
                     debug = false,
                     provider = "cpu",
-                ),
+                )
+                ModelManager.EngineKind.VITS -> OfflineTtsModelConfig(
+                    vits = OfflineTtsVitsModelConfig(
+                        model = modelFile.absolutePath,
+                        tokens = tokens.absolutePath,
+                        dataDir = if (espeak.isDirectory) espeak.absolutePath else "",
+                    ),
+                    numThreads = numThreads,
+                    debug = false,
+                    provider = "cpu",
+                )
+                ModelManager.EngineKind.KITTEN -> {
+                    val modelFile = chooseModelFile(modelDir, preferInt8)
+                        ?: return "Kitten bundle has no model .onnx"
+                    val tokens = File(modelDir, "tokens.txt")
+                    if (!tokens.isFile) return "Kitten bundle is missing tokens.txt"
+                    val voices = File(modelDir, "voices.bin")
+                    OfflineTtsModelConfig(kitten = OfflineTtsKittenModelConfig(
+                        model = modelFile.absolutePath,
+                        voices = if (voices.isFile) voices.absolutePath else "",
+                        tokens = tokens.absolutePath,
+                        dataDir = if (espeak.isDirectory) espeak.absolutePath else "",
+                    ))
+                }
+            }
+
+            val config = OfflineTtsConfig(
+                model = modelConfig,
                 ruleFsts = ruleFsts,
                 // Batch more sentences per internal pass — fewer vocoder invocations.
                 maxNumSentences = 3,
             )
             tts = OfflineTts(assetManager = null, config = config)
             loadedDir = modelDir
-            kind = detectedKind
+            kind = family
             null
         } catch (t: Throwable) {
             tts = null

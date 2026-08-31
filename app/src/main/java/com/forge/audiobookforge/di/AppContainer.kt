@@ -28,7 +28,7 @@ class AppContainer(private val context: Context) : ContainerApi {
     override suspend fun previewVoice(book: Book): String? = withContext(Dispatchers.IO) {
         val modelDir = models.ui.value.modelDir
             ?: return@withContext "Download the voice model first (Library screen)."
-        kokoroEngine.load(modelDir, settings.numThreads.value, settings.preferInt8.value)?.let { return@withContext it }
+        kokoroEngine.load(modelDir, settings.numThreads.value)?.let { return@withContext it }
 
         val speakers = kokoroEngine.numSpeakers()
         val sid = if (speakers > 0) book.voiceSid.coerceIn(0, speakers - 1) else book.voiceSid

@@ -19,7 +19,7 @@ import java.net.URL
  */
 class ModelManager(private val context: Context) {
 
-    enum class EngineKind { KOKORO, VITS }
+    enum class EngineKind { KOKORO, VITS, KITTEN }
 
     data class ModelOption(
         val id: String,
@@ -53,10 +53,7 @@ class ModelManager(private val context: Context) {
     val externalModelsRoot: File? =
         context.getExternalFilesDir(null)?.let { File(it, "models").apply { mkdirs() } }
 
-    fun isValidBundle(dir: File): Boolean =
-        dir.isDirectory &&
-            KokoroEngine.chooseModelFile(dir, preferInt8 = true) != null &&
-            File(dir, "tokens.txt").isFile()
+    fun isValidBundle(dir: File): Boolean = bundleKind(dir) != null && bundleTokensOk(dir)
 
     fun listExternal(): List<File> =
         externalModelsRoot?.listFiles { f -> f.isDirectory }
@@ -99,9 +96,7 @@ class ModelManager(private val context: Context) {
         // Known catalog locations first (plus legacy "kokoro" dir from earlier builds).
         for (opt in CATALOG) {
             val dir = dirFor(opt)
-            if (KokoroEngine.chooseModelFile(dir, preferInt8 = true) != null &&
-                File(dir, "tokens.txt").isFile()
-            ) {
+            if (isValidBundle(dir)) {
                 return ModelUi(
                     ready = true,
                     modelDir = dir,
@@ -112,7 +107,7 @@ class ModelManager(private val context: Context) {
         }
         // Sideloaded/unknown layout: any dir with a model file + tokens.txt.
         val any = modelsRoot.listFiles { f -> f.isDirectory }
-            ?.firstOrNull { KokoroEngine.chooseModelFile(it, preferInt8 = true) != null && File(it, "tokens.txt").isFile() }
+            ?.firstOrNull { isValidBundle(it) }
         return ModelUi(
             ready = any != null,
             modelDir = any,
@@ -122,7 +117,7 @@ class ModelManager(private val context: Context) {
     }
 
     private fun dirFor(opt: ModelOption): File =
-        if (opt.id == CATALOG.first().id) {
+        if (opt.id == "kokoro-int8") {
             // prefer the stable id, but accept the legacy name
             val stable = File(modelsRoot, opt.id)
             if (stable.isDirectory) stable else File(modelsRoot, "kokoro")
@@ -169,8 +164,7 @@ class ModelManager(private val context: Context) {
 
             // Verify the NEW install BEFORE touching the old one — a failed
             // download must never leave the user without a working model.
-            val newOk = KokoroEngine.chooseModelFile(target, preferInt8 = true) != null &&
-                File(target, "tokens.txt").isFile()
+            val newOk = bundleKind(target) != null && bundleTokensOk(target)
             check(newOk) {
                 "Extraction finished but no usable model files were found — " +
                     "your previous model is untouched."
@@ -264,7 +258,29 @@ class ModelManager(private val context: Context) {
         const val PIPER_MEDIUM_INT8_URL =
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium-int8.tar.bz2"
 
+        /** Kitten bundles look like Kokoro (voices.bin) but need the KITTEN config:
+         *  detect by directory-name prefix first. */
+        fun bundleKind(dir: File): EngineKind? {
+            if (!dir.isDirectory) return null
+            if (KokoroEngine.chooseModelFile(dir, preferInt8 = true) == null) return null
+            val n = dir.name.lowercase()
+            return when {
+                n.startsWith("kitten") -> EngineKind.KITTEN
+                File(dir, "voices.bin").isFile() -> EngineKind.KOKORO
+                else -> EngineKind.VITS
+            }
+        }
+        fun bundleTokensOk(dir: File): Boolean = File(dir, "tokens.txt").isFile()
+
         val CATALOG = listOf(
+            ModelOption(
+                id = "kokoro-fp32",
+                title = "Kokoro 82M · full precision",
+                subtitle = "Best quality — often fastest too on modern chips · ≈440 MB",
+                url = KOKORO_FULL_URL,
+                kind = EngineKind.KOKORO,
+                recommended = true,
+            ),
             ModelOption(
                 id = "kokoro-int8",
                 title = "Kokoro 82M · int8",
@@ -273,12 +289,11 @@ class ModelManager(private val context: Context) {
                 kind = EngineKind.KOKORO,
             ),
             ModelOption(
-                id = "kokoro-fp32",
-                title = "Kokoro 82M · full precision",
-                subtitle = "Best quality — often fastest too on modern chips · ≈440 MB",
-                url = KOKORO_FULL_URL,
-                kind = EngineKind.KOKORO,
-                recommended = true,
+                id = "kitten-nano-en",
+                title = "Kitten nano · en v0.8",
+                subtitle = "25M-param nano TTS, English, Apache-2.0 · ≈30 MB",
+                url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_8-int8.tar.bz2",
+                kind = EngineKind.KITTEN,
             ),
             ModelOption(
                 id = "piper-lessac",
