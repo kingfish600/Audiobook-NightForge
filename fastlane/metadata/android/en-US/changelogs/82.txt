@@ -1,0 +1,4 @@
+One-tap engine switching:
+- Installed engines stay on disk — switching no longer re-downloads
+- New Activate button in Settings; the app restarts itself with the chosen voice
+- Faster consecutive renders (engine stays loaded between books)
