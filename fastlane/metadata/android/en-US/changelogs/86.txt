@@ -1,0 +1,4 @@
+Stability rollback:
+- The model bay (Activate button, automatic restart) has been removed after device instability
+- Engine switching works the proven way: download the engine you want (the previous one is removed), then the app asks you to reopen it once
+- All v0.8.6-era behavior plus the Kitten engine and earlier UI improvements remain
