@@ -59,7 +59,13 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            // Assign the signing config ONLY when a keystore actually exists:
+            // an empty signingConfig makes AGP silently produce NO apk (the
+            // F-Droid buildserver has no keystore — it signs with its own key
+            // and expects the standard app-release-unsigned.apk).
+            if (ksProps.getProperty("storeFile") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
