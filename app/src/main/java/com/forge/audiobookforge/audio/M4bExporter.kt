@@ -23,6 +23,9 @@ object M4bExporter {
 
     data class Entry(val title: String, val startMs: Long)
 
+    /** Test hook: the exact Nero chpl payload bytes for these chapters. */
+    internal fun chplPayloadForTest(chapters: List<Entry>): ByteArray = ChapterBox.buildPayload(chapters)
+
     data class Result(
         val file: File,
         val chapters: Int,
@@ -173,7 +176,7 @@ object M4bExporter {
  * rewrite just that tail. Files larger than 2 GB (64-bit box sizes) are
  * rejected rather than mis-written.
  */
-private object ChapterBox {
+internal object ChapterBox {
 
     private data class Child(val type: String, val bytes: ByteArray)
 
@@ -207,7 +210,7 @@ private object ChapterBox {
             p += sz
         }
 
-        val chplPayload = buildPayload(chapters, totalMs)
+        val chplPayload = buildPayload(chapters)
         val chpl = box("chpl", chplPayload)
         val udta = box("udta", chpl) // fresh udta containing only our chpl
 
@@ -442,19 +445,31 @@ private object ChapterBox {
         return arr
     }
 
-    private fun buildPayload(chapters: List<M4bExporter.Entry>, totalMs: Long): ByteArray {
-        val titles = chapters.map { (t, _) -> t.take(200).toByteArray(Charsets.UTF_8) }
-        var body = 4 + chapters.size * 9 + titles.sumOf { 1 + it.size }
-        val buf = ByteBuffer.allocate(8 + body).order(java.nio.ByteOrder.BIG_ENDIAN)
-        buf.put(0.toByte()); buf.putShort(0); buf.put(0.toByte())   // version 0, flags
-        buf.putInt(chapters.size)
-        for ((i, e) in chapters.withIndex()) {
-            val endMs = chapters.getOrNull(i + 1)?.startMs ?: totalMs
-            buf.putInt((e.startMs * 10_000).toInt())
-            buf.putInt((endMs.coerceAtLeast(e.startMs) * 10_000).toInt())
+    internal fun buildPayload(chapters: List<M4bExporter.Entry>): ByteArray {
+        // Nero chpl, version 1. Layout verified against FFmpeg's
+        // mov_write_chpl_tag() and GPAC's chpl_box_read():
+        //   4B version+flags (0x01000000), 4B reserved, 1B chapter count,
+        //   then per chapter: 8B start in 100ns units, 1B title length, title.
+        // The previous layout wrote a 32-bit count and 32-bit start/end, which
+        // shifted every field: compliant parsers read count = 0 and saw no
+        // chapters at all (and starts past 3.58 min overflowed anyway).
+        // End times are not stored by this box — players derive them from the
+        // next chapter's start (verified with ffprobe).
+        val titles = chapters.map { (t, _) ->
+            val raw = t.take(200).toByteArray(Charsets.UTF_8)
+            if (raw.size > 255) raw.copyOf(255) else raw
+        }
+        val count = chapters.size.coerceAtMost(255)
+        val body = 4 + 4 + 1 + count * 9 + (0 until count).sumOf { 1 + titles[it].size }
+        val buf = ByteBuffer.allocate(body).order(java.nio.ByteOrder.BIG_ENDIAN)
+        buf.putInt(0x01000000)   // version 1, flags 0
+        buf.putInt(0)            // reserved
+        buf.put(count.toByte())  // chapter count (8-bit)
+        for (i in 0 until count) {
+            buf.putLong(chapters[i].startMs * 10_000L)  // 64-bit start, 100ns units
             val t = titles[i]
-            buf.put(t.size.coerceAtMost(255).toByte())
-            buf.put(t, 0, t.size.coerceAtMost(255))
+            buf.put(t.size.toByte())
+            buf.put(t)
         }
         buf.flip()
         val arr = ByteArray(buf.remaining()); buf.get(arr); return arr
