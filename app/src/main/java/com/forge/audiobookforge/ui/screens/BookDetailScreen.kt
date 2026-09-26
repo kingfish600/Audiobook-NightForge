@@ -50,6 +50,7 @@ import com.forge.audiobookforge.conversion.ConversionWorker
 import com.forge.audiobookforge.data.model.Book
 import com.forge.audiobookforge.data.model.ChapterStatus
 import com.forge.audiobookforge.di.LocalAppContainer
+import com.forge.audiobookforge.tts.ModelManager
 import com.forge.audiobookforge.tts.Voices
 import kotlinx.coroutines.launch
 import java.io.File
@@ -118,18 +119,36 @@ fun BookDetailScreen(bookId: String?) {
                     if (book.author.isNotBlank()) Text(book.author, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(10.dp))
 
-                    // Voice picker (single-voice engines like Piper Lite have nothing to pick)
-                    val singleVoice = container.kokoroEngine.isLoaded &&
-                        container.kokoroEngine.numSpeakers() <= 1
+                    // Voice picker — the options come from the ACTIVE engine. This used to
+                    // always list Kokoro's 54 voices, so with Piper (1 voice) or any other
+                    // engine loaded you could "pick" a voice that did not exist and the app
+                    // silently clamped it. Unknown/not-loaded defaults to the Kokoro roster.
+                    val engineKind = container.kokoroEngine.kind
+                    val engineLoaded = container.kokoroEngine.isLoaded
+                    val speakerCount = if (engineLoaded) container.kokoroEngine.numSpeakers() else 0
+                    val isKokoro = engineKind == null || engineKind == ModelManager.EngineKind.KOKORO
+                    val voiceOptions: List<Voices.Voice> = when {
+                        !engineLoaded && isKokoro -> Voices.ALL
+                        isKokoro && speakerCount > 1 -> Voices.ALL
+                        !isKokoro && speakerCount > 1 ->
+                            (0 until speakerCount).map { Voices.Voice(it, "Speaker ${it + 1}", "") }
+                        else -> emptyList()
+                    }
+                    val singleVoice = engineLoaded && speakerCount <= 1
                     var voiceMenu by remember { mutableStateOf(false) }
-                    OutlinedButton(enabled = !singleVoice, onClick = { voiceMenu = true }) {
+                    OutlinedButton(enabled = !singleVoice && voiceOptions.isNotEmpty(), onClick = { voiceMenu = true }) {
                         Text(
-                            if (singleVoice) "Voice: built-in"
-                            else "Voice: ${Voices.displayName(book.voiceSid)}"
+                            when {
+                                singleVoice || voiceOptions.isEmpty() -> "Voice: built-in"
+                                else -> {
+                                    val chosen = voiceOptions.firstOrNull { it.sid == book.voiceSid }
+                                    "Voice: ${chosen?.name ?: "Speaker ${book.voiceSid + 1}"}"
+                                }
+                            }
                         )
                     }
                     DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
-                        Voices.ALL.forEach { v ->
+                        voiceOptions.forEach { v ->
                             DropdownMenuItem(
                                 text = { Text("${v.description} — ${v.name}") },
                                 onClick = {

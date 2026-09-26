@@ -53,7 +53,8 @@ class ModelManager(private val context: Context) {
     val externalModelsRoot: File? =
         context.getExternalFilesDir(null)?.let { File(it, "models").apply { mkdirs() } }
 
-    fun isValidBundle(dir: File): Boolean = bundleKind(dir) != null && bundleTokensOk(dir)
+    fun isValidBundle(dir: File): Boolean =
+        bundleKind(dir) != null && bundleTokensOk(dir) && bundleSizeSane(dir)
 
     fun listExternal(): List<File> =
         externalModelsRoot?.listFiles { f -> f.isDirectory }
@@ -164,7 +165,7 @@ class ModelManager(private val context: Context) {
 
             // Verify the NEW install BEFORE touching the old one — a failed
             // download must never leave the user without a working model.
-            val newOk = bundleKind(target) != null && bundleTokensOk(target)
+            val newOk = bundleKind(target) != null && bundleTokensOk(target) && bundleSizeSane(target)
             check(newOk) {
                 "Extraction finished but no usable model files were found — " +
                     "your previous model is untouched."
@@ -232,6 +233,14 @@ class ModelManager(private val context: Context) {
                 }
             }
         }
+        // Completeness: a truncated download passes the existence checks below
+        // and then kills the process inside the native engine, so never adopt
+        // one. Content-Length is the only signal the server gives us.
+        if (total > 0) {
+            check(dest.length() == total) {
+                "Download incomplete (${dest.length()} of $total bytes) — retry"
+            }
+        }
     }
 
     private fun extractTarBz2(archive: File, destDir: File, onFileExtracted: (Int) -> Unit = {}) {
@@ -271,6 +280,23 @@ class ModelManager(private val context: Context) {
             }
         }
         fun bundleTokensOk(dir: File): Boolean = File(dir, "tokens.txt").isFile()
+
+        /**
+         * Existence is not integrity: a truncated download leaves a file with the
+         * right NAME and the wrong bytes, and the native engine dies on it (no Java
+         * exception to catch). Require plausible sizes before adopting a bundle.
+         */
+        internal fun bundleSizeSane(dir: File): Boolean {
+            val model = KokoroEngine.chooseModelFile(dir, preferInt8 = true) ?: return false
+            if (model.length() < 1_000_000) return false
+            val tokens = File(dir, "tokens.txt")
+            if (tokens.isFile && tokens.length() < 100) return false
+            return true
+        }
+
+        /** Test hook: bundle usability without an Android context. */
+        internal fun isValidBundleForTest(dir: File): Boolean =
+            bundleKind(dir) != null && bundleTokensOk(dir) && bundleSizeSane(dir)
 
         val CATALOG = listOf(
             ModelOption(
