@@ -4,6 +4,8 @@ import com.forge.audiobookforge.audio.M4bExporter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -66,5 +68,40 @@ class ChplChapterBoxTest {
         val buf = ByteBuffer.wrap(M4bExporter.chplPayloadForTest(many)).order(ByteOrder.BIG_ENDIAN)
         buf.int; buf.int
         assertEquals(255, buf.get().toInt() and 0xFF)
+    }
+
+    @Test
+    fun longTitlesAreTruncatedOnCodePointBoundaries() {
+        val emoji = "\uD83D\uDE00" // 4 UTF-8 bytes
+        val payload = M4bExporter.chplPayloadForTest(
+            listOf(M4bExporter.Entry(emoji.repeat(100), 0L))
+        )
+        val len = payload[17].toInt() and 0xFF
+        val title = payload.copyOfRange(18, 18 + len)
+        assertEquals(0, title.size % 4)                                   // whole code points
+        assertEquals(len, String(title, Charsets.UTF_8).toByteArray(Charsets.UTF_8).size)
+        assertTrue(len <= 255)
+    }
+
+    @Test
+    fun verifyChplParsesTheBoxAndRejectsACountMismatch() {
+        fun box(type: String, payload: ByteArray): ByteArray {
+            val out = ByteArray(8 + payload.size)
+            ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN).putInt(out.size)
+            type.toByteArray(Charsets.US_ASCII).copyInto(out, 4)
+            payload.copyInto(out, 8)
+            return out
+        }
+        val payload = M4bExporter.chplPayloadForTest(
+            listOf(M4bExporter.Entry("A", 0L), M4bExporter.Entry("B", 1_000L))
+        )
+        val f = java.io.File.createTempFile("chpl", ".mp4")
+        try {
+            f.writeBytes(box("moov", box("udta", box("chpl", payload))))
+            assertTrue("well-formed box must verify", M4bExporter.verifyChplForTest(f, 2))
+            assertFalse("count mismatch must fail", M4bExporter.verifyChplForTest(f, 5))
+        } finally {
+            f.delete()
+        }
     }
 }

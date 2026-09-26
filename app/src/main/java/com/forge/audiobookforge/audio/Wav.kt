@@ -53,7 +53,7 @@ object Wav {
         header.putShort(1)             // mono
         header.putInt(sampleRate)
         header.putInt(sampleRate * 2)  // byte rate
-        header.putShort(1)             // block align
+        header.putShort(2)             // block align: mono x 16-bit = 2 bytes/frame
         header.putShort(16)            // bits per sample
         header.put("data".toByteArray())
         header.putInt(dataSize)

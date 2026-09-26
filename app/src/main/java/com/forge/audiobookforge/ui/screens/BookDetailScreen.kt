@@ -83,11 +83,16 @@ fun BookDetailScreen(bookId: String?) {
         val src = pendingM4b
         if (uri != null && src != null) {
             snackbarScope.launch {
-                runCatching {
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        src.inputStream().use { it.copyTo(out) }
-                    } ?: error("Could not open destination")
-                }.onSuccess {
+                // Copying a finished audiobook can be hundreds of MB — never on
+                // the main thread (ANR risk).
+                val copied = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            src.inputStream().use { it.copyTo(out) }
+                        } ?: error("Could not open destination")
+                    }
+                }
+                copied.onSuccess {
                     src.delete()
                     pendingM4b = null
                     snackbar.showSnackbar("Single-file audiobook saved")

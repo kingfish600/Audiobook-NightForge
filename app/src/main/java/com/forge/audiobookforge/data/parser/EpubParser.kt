@@ -2,7 +2,6 @@ package com.forge.audiobookforge.data.parser
 
 import java.io.BufferedInputStream
 import java.io.InputStream
-import java.net.URLDecoder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
@@ -66,7 +65,7 @@ object EpubParser {
         for (idref in spineOrder) {
             val (hrefRaw, mediaType) = manifest[idref] ?: continue
             if (!mediaType.contains("html")) continue
-            val href = URLDecoder.decode(hrefRaw.replace("./", ""), "UTF-8")
+            val href = decodeHref(hrefRaw)
             val path = normalize(if (opfDir.isEmpty()) href else "$opfDir/$href")
             val docBytes = entries[path] ?: continue
             val html = docBytes.toString(Charsets.UTF_8)
@@ -98,6 +97,33 @@ object EpubParser {
 
     private fun stripTags(s: String): String =
         s.replace(Regex("<[^>]+>"), "").trim()
+
+    /**
+     * Resolves a manifest href the way a reading system does: XML entities first,
+     * then percent-escapes. Deliberately NOT URLDecoder.decode(), which is form
+     * decoding and rewrites a literal '+' in a filename into a space; combined
+     * with blindly stripping "./" it silently dropped real chapters (a reader
+     * would just open the file). ".." segments are resolved by [normalize].
+     */
+    private fun decodeHref(raw: String): String {
+        val entityDecoded = raw.replace("&amp;", "&")
+        val out = StringBuilder(entityDecoded.length)
+        var i = 0
+        while (i < entityDecoded.length) {
+            val c = entityDecoded[i]
+            if (c == '%' && i + 2 < entityDecoded.length) {
+                val v = entityDecoded.substring(i + 1, i + 3).toIntOrNull(16)
+                if (v != null) {
+                    out.append(v.toChar())
+                    i += 3
+                    continue
+                }
+            }
+            out.append(c)
+            i++
+        }
+        return out.toString()
+    }
 
     private fun normalize(p: String): String {
         val out = ArrayList<String>()

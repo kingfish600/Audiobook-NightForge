@@ -26,6 +26,9 @@ object M4bExporter {
     /** Test hook: the exact Nero chpl payload bytes for these chapters. */
     internal fun chplPayloadForTest(chapters: List<Entry>): ByteArray = ChapterBox.buildPayload(chapters)
 
+    internal fun verifyChplForTest(f: File, expectedChapters: Int): Boolean =
+        ChapterBox.verifyChpl(f, expectedChapters)
+
     data class Result(
         val file: File,
         val chapters: Int,
@@ -154,7 +157,7 @@ object M4bExporter {
 
         val totalMs = baseUs / 1_000
         ChapterBox.writeChapters(tmp, entries, totalMs)
-        neroOk = ChapterBox.verifyChpl(tmp)
+        neroOk = ChapterBox.verifyChpl(tmp, entries.size)
         if (textTrack >= 0) {
             ChapterBox.injectChapReference(tmp)
             appleOk = true
@@ -166,7 +169,11 @@ object M4bExporter {
             tmp.copyTo(out, overwrite = true)
             tmp.delete()
         }
-        return Result(out, entries.size, totalMs, neroOk, appleOk, appleRefused)
+        // Report what the file actually carries: the Nero chpl box holds at most
+        // 255 chapters, so when the Apple chapter track was refused this is the
+        // only chapter source and the count must not overstate it.
+        val reportedChapters = if (appleOk) entries.size else entries.size.coerceAtMost(255)
+        return Result(out, reportedChapters, totalMs, neroOk, appleOk, appleRefused)
     }
 }
 
@@ -406,7 +413,9 @@ internal object ChapterBox {
                 base += sz
             }
         }
-        for (bs in candidates.reversed()) { // final atom most likely last candidate
+        // Deliberately avoid LinkedHashSet.reversed(): on JDK 21+ that resolves to the
+        // SequencedCollection member, which does not exist on older runtimes (NoSuchMethodError).
+        for (bs in candidates.toList().asReversed()) { // final atom most likely last candidate
             java.io.RandomAccessFile(f, "r").use { raf ->
                 raf.seek(bs)
                 val hdr = ByteArray(8).also { raf.readFully(it) }
@@ -428,10 +437,53 @@ internal object ChapterBox {
             raf.seek(off); ByteArray(len).also { raf.readFully(it) }
         }
 
-    /** Cheap proof that our chpl survived on disk under moov/udta. */
-    fun verifyChpl(f: File): Boolean = runCatching {
-        val (off, lenB) = locateMoovRobust(f)
-        String(readAt(f, off, lenB), Charsets.ISO_8859_1).contains("chpl")
+    /**
+     * Structural proof that the chpl we wrote is actually readable: locate
+     * moov/udta/chpl, check the version word, walk every entry, and confirm the
+     * declared count matches what we meant to write. The previous check only
+     * looked for the ASCII string "chpl" — which the app itself had just
+     * written — so it reported success for a box no player could parse.
+     */
+    fun verifyChpl(f: File, expectedChapters: Int): Boolean = runCatching {
+        val (moovOff, moovLen) = locateMoovRobust(f)
+        val moov = java.nio.ByteBuffer.wrap(readAt(f, moovOff, moovLen))
+            .order(java.nio.ByteOrder.BIG_ENDIAN)
+        val cap = moov.capacity()
+        fun typeAt(at: Int): String {
+            val t = ByteArray(4); moov.get(at, t); return String(t, Charsets.US_ASCII)
+        }
+        val want = expectedChapters.coerceAtMost(255)
+        var p = 8
+        while (p + 8 <= cap) {
+            val size = moov.getInt(p)
+            if (size < 8 || p + size > cap) break
+            if (typeAt(p + 4) == "udta") {
+                var q = p + 8
+                while (q + 8 <= p + size) {
+                    val csize = moov.getInt(q)
+                    if (csize < 8 || q + csize > p + size) break
+                    if (typeAt(q + 4) == "chpl") {
+                        val body = q + 8
+                        val end = q + csize
+                        if (body + 9 > end) return@runCatching false
+                        if (moov.getInt(body) != 0x01000000) return@runCatching false
+                        val count = moov.get(body + 8).toInt() and 0xFF
+                        var e = body + 9
+                        repeat(count) {
+                            if (e + 9 > end) return@runCatching false
+                            e += 8
+                            val len = moov.get(e).toInt() and 0xFF
+                            e += 1 + len
+                            if (e > end) return@runCatching false
+                        }
+                        return@runCatching count == want
+                    }
+                    q += csize
+                }
+            }
+            p += size
+        }
+        false
     }.getOrDefault(false)
 
     private fun mergeChildren(kids: List<Child>): ByteArray {
@@ -445,6 +497,22 @@ internal object ChapterBox {
         return arr
     }
 
+    /** UTF-8-safe truncation: never split a multi-byte character (which would
+     *  emit invalid UTF-8 in the chapter title). */
+    private fun utf8Trim(s: String, maxBytes: Int): ByteArray {
+        var i = 0
+        var total = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            val n = Character.charCount(cp)
+            val bytes = s.substring(i, i + n).toByteArray(Charsets.UTF_8).size
+            if (total + bytes > maxBytes) break
+            total += bytes
+            i += n
+        }
+        return s.substring(0, i).toByteArray(Charsets.UTF_8)
+    }
+
     internal fun buildPayload(chapters: List<M4bExporter.Entry>): ByteArray {
         // Nero chpl, version 1. Layout verified against FFmpeg's
         // mov_write_chpl_tag() and GPAC's chpl_box_read():
@@ -455,10 +523,7 @@ internal object ChapterBox {
         // chapters at all (and starts past 3.58 min overflowed anyway).
         // End times are not stored by this box — players derive them from the
         // next chapter's start (verified with ffprobe).
-        val titles = chapters.map { (t, _) ->
-            val raw = t.take(200).toByteArray(Charsets.UTF_8)
-            if (raw.size > 255) raw.copyOf(255) else raw
-        }
+        val titles = chapters.map { (t, _) -> utf8Trim(t, 255) }
         val count = chapters.size.coerceAtMost(255)
         val body = 4 + 4 + 1 + count * 9 + (0 until count).sumOf { 1 + titles[it].size }
         val buf = ByteBuffer.allocate(body).order(java.nio.ByteOrder.BIG_ENDIAN)
