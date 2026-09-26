@@ -14,3 +14,8 @@ app/src/main/jniLibs/*.tar.bz2
 # Distribution artifacts and IDE noise
 *.apk
 .kotlin/
+
+# Signing secrets — never commit
+keystore.properties
+*.jks
+*.keystore
