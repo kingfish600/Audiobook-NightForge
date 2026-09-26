@@ -59,6 +59,12 @@ class KokoroEngine {
             ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
         val modelFile = chooseModelFile(modelDir, preferInt8)
             ?: return "No model.int8.onnx or model.onnx found in ${modelDir.absolutePath}"
+        // An incomplete model file kills the process inside native code, where no
+        // catch block can help. Refuse it here, where we can still explain.
+        if (modelFile.length() < 1_000_000) {
+            return "This voice model looks incomplete (${modelFile.length()} bytes) — " +
+                "delete it on the Library screen and download it again."
+        }
         val tokens = File(modelDir, "tokens.txt")
         if (!tokens.isFile) return "Model bundle is missing tokens.txt"
 
