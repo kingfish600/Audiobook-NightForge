@@ -30,31 +30,34 @@ class KokoroEngine {
 
     private var tts: OfflineTts? = null
 
-    // Set once the native engine has been freed (Free-memory hook). Further
-    // loads are refused with a friendly message: re-creating a native engine
-    // in the same process is not supported by sherpa-onnx.
-    @Volatile
-    private var poisoned = false
-
     var loadedDir: File? = null; private set
     var kind: ModelManager.EngineKind? = null; private set
     val isLoaded: Boolean get() = tts != null
 
     /**
-     * Loads a model bundle. Returns null on success, or a human-readable
-     * error message describing exactly what went wrong.
+     * Loads [modelDir], switching engines IN-PROCESS when a different one is already
+     * loaded. Releasing and re-creating the native engine is safe: the GBGH playground
+     * has shipped exactly this on real devices, and the engine-switch lab shows
+     * release + re-create runs clean (several engines can even coexist). The old
+     * "restart the app to switch" behaviour is gone.
+     *
+     * If the new bundle cannot be loaded, the previous engine is put back so the user
+     * is never left without TTS, and the error is returned for display.
      */
     @Synchronized
     fun load(modelDir: File, numThreads: Int = 4, preferInt8: Boolean = true): String? {
-        if (poisoned) {
-            return "Engine resources were freed to save RAM — restart the app to load a model."
+        if (tts != null && loadedDir == modelDir) return null
+        val previousDir = loadedDir
+        if (tts != null) release()
+        val result = loadInternal(modelDir, numThreads, preferInt8)
+        if (result != null && tts == null && previousDir != null && previousDir != modelDir) {
+            runCatching { loadInternal(previousDir, numThreads, preferInt8) }
         }
-        if (tts != null) {
-            if (loadedDir == modelDir) return null
-            // One engine per process (upstream constraint). The choice is
-            // already persisted by ModelManager; a restart picks it up.
-            return RESTART_MSG + modelDir.name + "."
-        }
+        return result
+    }
+
+    @Synchronized
+    private fun loadInternal(modelDir: File, numThreads: Int, preferInt8: Boolean): String? {
         val family = ModelManager.bundleKind(modelDir)
             ?: return "Unrecognized model bundle layout in ${modelDir.absolutePath}"
         val modelFile = chooseModelFile(modelDir, preferInt8)
@@ -160,15 +163,14 @@ class KokoroEngine {
     }
 
     /**
-     * Terminal. Frees the native engine. Because a
-     * native release + re-create cycle crashes the process, the instance
-     * is poisoned afterwards: load() refuses with a friendly restart hint.
+     * Frees the native engine (e.g. the Settings "unload to save RAM" button).
+     * NOT terminal any more: the next load() simply re-creates the engine in
+     * process, so nothing below needs a restart.
      */
     @Synchronized
     fun release() {
         runCatching { tts?.release() }
         tts = null
-        poisoned = true
         loadedDir = null
         kind = null
     }

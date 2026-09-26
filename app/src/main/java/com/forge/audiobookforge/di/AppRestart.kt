@@ -29,8 +29,19 @@ object AppRestart {
                 PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            // set() (inexact) — no SCHEDULE_EXACT_ALARM permission needed.
-            am.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 100, pi)
+            // setAlarmClock() rather than set(): since Android 10 a plain alarm is NOT
+            // allowed to start an activity from the background, so the relaunch could
+            // silently never happen and the app just "force closed". Alarm-clock
+            // intents are exempt from that restriction.
+            runCatching {
+                am.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(System.currentTimeMillis() + 250, pi),
+                    pi,
+                )
+            }.onFailure {
+                // Fall back to a plain alarm if the OEM blocks alarm clocks.
+                am.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 150, pi)
+            }
             android.util.Log.i("AppRestart", "relaunch armed; exiting process")
             // Exit off the main thread, ProcessPhoenix-style.
             Thread { Runtime.getRuntime().exit(0) }.start()
