@@ -67,7 +67,11 @@ class LibraryRepository(private val context: Context) {
         // final progress write.
         if (tombstoneFile(book.id).exists()) return
         val dir = dirFor(book.id).apply { mkdirs() }
-        File(dir, "book.json").writeText(json.encodeToString(Book.serializer(), book))
+        // Atomic: a torn book.json is indistinguishable from a deleted book.
+        com.forge.audiobookforge.util.SafeWrite.text(
+            File(dir, "book.json"),
+            json.encodeToString(Book.serializer(), book),
+        )
         _books.value = _books.value.toList() // poke observers
     }
 

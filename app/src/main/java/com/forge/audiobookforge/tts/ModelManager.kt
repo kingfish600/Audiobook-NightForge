@@ -75,6 +75,9 @@ class ModelManager(private val context: Context) {
 
     private fun prefs() = context.getSharedPreferences("forge_settings", Context.MODE_PRIVATE)
 
+    /** Guards against concurrent installs (double tap on Get/Download). */
+    private val inFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private val _ui = MutableStateFlow(detect())
     val ui: StateFlow<ModelUi> = _ui.asStateFlow()
 
@@ -127,6 +130,10 @@ class ModelManager(private val context: Context) {
         }
 
     suspend fun download(option: ModelOption) = withContext(Dispatchers.IO) {
+        // Single-flight. Two installs running at once (a fast double tap) could
+        // interleave their staging directories and delete the working model while
+        // reporting that nothing had been touched.
+        if (!inFlight.compareAndSet(false, true)) return@withContext
         try {
             val replaced = _ui.value.optionId?.let { id -> CATALOG.firstOrNull { it.id == id }?.title }
                 ?: _ui.value.modelDir?.let { "the previously installed model" }
@@ -156,20 +163,27 @@ class ModelManager(private val context: Context) {
 
             val inner = stage.listFiles { f -> f.isDirectory }?.firstOrNull() ?: stage
             val target = File(modelsRoot, option.id)
-            target.deleteRecursively()
+            // Transactional swap. The old code deleted the working model BEFORE
+            // validating the new one, so an unusable archive left the user with
+            // nothing while the message claimed the previous model was untouched.
+            val backup = File(modelsRoot, option.id + ".backup").apply { deleteRecursively() }
+            val hadOld = target.isDirectory && target.renameTo(backup)
             if (!inner.renameTo(target)) {
                 inner.copyRecursively(target, overwrite = true)
                 inner.deleteRecursively()
             }
             stage.deleteRecursively()
 
-            // Verify the NEW install BEFORE touching the old one — a failed
-            // download must never leave the user without a working model.
             val newOk = bundleKind(target) != null && bundleTokensOk(target) && bundleSizeSane(target)
-            check(newOk) {
-                "Extraction finished but no usable model files were found — " +
-                    "your previous model is untouched."
+            if (!newOk) {
+                target.deleteRecursively()
+                if (hadOld) backup.renameTo(target)
+                check(false) {
+                    "The downloaded model could not be verified — " +
+                        if (hadOld) "your previous model is still in place." else "nothing was installed."
+                }
             }
+            backup.deleteRecursively()
 
             // Verified: now enforce one-model-at-a-time.
             CATALOG.filter { it.id != option.id }.forEach { other ->
@@ -184,7 +198,9 @@ class ModelManager(private val context: Context) {
                     notice = "${option.title} installed — previous model removed",
                 )
             }
+            inFlight.set(false)
         } catch (t: Throwable) {
+            inFlight.set(false)
             update {
                 it.copy(
                     downloading = false,

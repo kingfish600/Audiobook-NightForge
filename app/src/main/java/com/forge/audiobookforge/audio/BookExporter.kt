@@ -114,6 +114,20 @@ object BookExporter {
     private fun mimeFor(fileName: String): String =
         when { fileName.endsWith(".ogg", true) -> "audio/ogg"; fileName.endsWith(".wav", true) -> "audio/wav"; else -> "audio/mp4" }
 
-    private fun sanitize(name: String): String =
-        name.replace(Regex("[^A-Za-z0-9 ()'._-]"), "_").trim().take(64).ifEmpty { "book" }
+    /**
+     * Keeps Unicode letters/digits. The previous ASCII-only filter turned every
+     * non-Latin title into underscores, so 红楼梦 and 西游记 both became "___",
+     * landed in the SAME export folder, and overwrote each other.
+     */
+    internal fun sanitize(name: String): String {
+        val cleaned = name.map { c ->
+            when {
+                c.isLetterOrDigit() || c == ' ' || c in "()'._-" -> c
+                else -> '_'
+            }
+        }.joinToString("").trim().take(64)
+        // "." or ".." would resolve to a directory when joined onto a path.
+        if (cleaned.isEmpty() || cleaned.all { it == '.' }) return "book"
+        return cleaned
+    }
 }

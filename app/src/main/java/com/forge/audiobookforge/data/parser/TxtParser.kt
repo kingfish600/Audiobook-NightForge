@@ -6,6 +6,30 @@ import java.io.File
 /** Plain-text book parser with chapter-heading heuristics. */
 object TxtParser {
 
+    /**
+     * Decodes a text file the way a reader would. Reading everything as UTF-8
+     * silently turned every byte of a GBK/UTF-16 book into U+FFFD, which then
+     * produced a single garbage "Part 1" chapter with no warning.
+     */
+    internal fun decodeText(bytes: ByteArray): String {
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+            return String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+        }
+        val strict = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        runCatching { return strict.decode(java.nio.ByteBuffer.wrap(bytes)).toString() }
+        // GB18030 is a superset of GBK and ships with Android.
+        runCatching { return String(bytes, charset("GB18030")) }
+        return String(bytes, Charsets.UTF_8) // last resort: readable-ish, never a crash
+    }
+
     private val headingPatterns = listOf(
         Regex("""^\s{0,4}(chapter|CHAPTER|Chapter)\s+([0-9]{1,3}|[IVXLCDM]+|[a-z]+)\b.*$"""),
         Regex("""^\s{0,4}(prologue|epilogue|PROLOGUE|EPILOGUE|foreword|afterword)\s*$"""),
@@ -13,8 +37,7 @@ object TxtParser {
     )
 
     fun parse(file: File): EpubParser.ParsedBook {
-        var text = file.readText(Charsets.UTF_8)
-        if (text.startsWith("\uFEFF")) text = text.removePrefix("\uFEFF")
+        val text = decodeText(file.readBytes())
         val chapters = detectChapters(text)
         // Internal storage names are meaningless ("source"); let the caller fall
         // back to whatever the file picker reported instead.
