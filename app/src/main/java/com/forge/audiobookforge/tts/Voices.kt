@@ -3,9 +3,10 @@ package com.forge.audiobookforge.tts
 /**
  * Complete Kokoro v1.0 multi-lang voice catalog.
  *
- * sid == index into kokoro-multi-lang-v1_0's voices.bin, verified against
- * k2-fsa/sherpa-onnx scripts/kokoro/v1.0/generate_voices_bin.py (53 voices,
- * ids 0..52). Do not edit sids by hand.
+ * sid == index into kokoro-multi-lang-v1_0's voices.bin, taken verbatim from
+ * k2-fsa/sherpa-onnx scripts/kokoro/v1.0/generate_voices_bin.py (54 voices,
+ * ids 0..53; the bundle README confirms em_santa was appended at 53 and that
+ * ids 0..52 are unchanged). Do not edit sids by hand.
  */
 object Voices {
     data class Voice(val sid: Int, val name: String, val description: String)
@@ -32,7 +33,6 @@ object Voices {
         Voice(17, "am_onyx", "🇺🇸 US male · deep"),
         Voice(18, "am_puck", "🇺🇸 US male · playful"),
         Voice(19, "am_santa", "🇺🇸 US male · festive 🎅"),
-
         // ---- British English ----
         Voice(20, "bf_alice", "🇬🇧 UK female"),
         Voice(21, "bf_emma", "🇬🇧 UK female ★"),
@@ -42,44 +42,40 @@ object Voices {
         Voice(25, "bm_fable", "🇬🇧 UK male · storyteller"),
         Voice(26, "bm_george", "🇬🇧 UK male"),
         Voice(27, "bm_lewis", "🇬🇧 UK male"),
-
         // ---- Spanish ----
         Voice(28, "ef_dora", "🇪🇸 Español · femenina"),
         Voice(29, "em_alex", "🇪🇸 Español · masculino"),
-
         // ---- French ----
         Voice(30, "ff_siwis", "🇫🇷 Français · féminine"),
-
         // ---- Hindi ----
         Voice(31, "hf_alpha", "🇮🇳 हिन्दी · female"),
         Voice(32, "hf_beta", "🇮🇳 हिन्दी · female"),
         Voice(33, "hm_omega", "🇮🇳 हिन्दी · male"),
         Voice(34, "hm_psi", "🇮🇳 हिन्दी · male"),
-
         // ---- Italian ----
         Voice(35, "if_sara", "🇮🇹 Italiano · femminile"),
         Voice(36, "im_nicola", "🇮🇹 Italiano · maschile"),
-
         // ---- Japanese ----
         Voice(37, "jf_alpha", "🇯🇵 日本語 · 女性 ★"),
         Voice(38, "jf_gongitsune", "🇯🇵 日本語 · 女性"),
         Voice(39, "jf_nezumi", "🇯🇵 日本語 · 女性"),
         Voice(40, "jf_tebukuro", "🇯🇵 日本語 · 女性"),
         Voice(41, "jm_kumo", "🇯🇵 日本語 · 男性"),
-
         // ---- Brazilian Portuguese ----
         Voice(42, "pf_dora", "🇧🇷 Português · feminina"),
         Voice(43, "pm_alex", "🇧🇷 Português · masculino"),
-
+        Voice(44, "pm_santa", "🇧🇷 Português · masculino"),
         // ---- Mandarin Chinese ----
-        Voice(44, "zf_xiaobei", "🇨🇳 中文 · 女声"),
-        Voice(45, "zf_xiaoni", "🇨🇳 中文 · 女声"),
-        Voice(46, "zf_xiaoxiao", "🇨🇳 中文 · 女声 ★"),
-        Voice(47, "zf_xiaoyi", "🇨🇳 中文 · 女声"),
-        Voice(48, "zm_yunjian", "🇨🇳 中文 · 男声"),
-        Voice(49, "zm_yunxi", "🇨🇳 中文 · 男声 ★"),
-        Voice(50, "zm_yunxia", "🇨🇳 中文 · 男声"),
-        Voice(51, "zm_yunyang", "🇨🇳 中文 · 男声"),
+        Voice(45, "zf_xiaobei", "🇨🇳 中文 · 女声"),
+        Voice(46, "zf_xiaoni", "🇨🇳 中文 · 女声"),
+        Voice(47, "zf_xiaoxiao", "🇨🇳 中文 · 女声 ★"),
+        Voice(48, "zf_xiaoyi", "🇨🇳 中文 · 女声"),
+        Voice(49, "zm_yunjian", "🇨🇳 中文 · 男声"),
+        Voice(50, "zm_yunxi", "🇨🇳 中文 · 男声 ★"),
+        Voice(51, "zm_yunxia", "🇨🇳 中文 · 男声"),
+        Voice(52, "zm_yunyang", "🇨🇳 中文 · 男声"),
+        // ---- Spanish ----
+        Voice(53, "em_santa", "🇪🇸 Español · masculino"),
     )
 
     fun displayName(sid: Int): String =
@@ -87,4 +83,29 @@ object Voices {
 
     fun description(sid: Int): String =
         ALL.firstOrNull { it.sid == sid }?.description ?: ""
+
+    /**
+     * eSpeak language for a voice, passed per synthesis call as
+     * generationConfig.extra["lang"] (Kokoro >= 1.0 honours it — see sherpa's
+     * offline-tts-kokoro-impl.h). Without it the engine falls back to the bundle
+     * default, which pronounced every non-English voice with an English accent.
+     * "" means "let the engine decide".
+     */
+    fun langForSid(sid: Int): String {
+        val name = ALL.firstOrNull { it.sid == sid }?.name ?: return ""
+        return when (name.substringBefore('_')) {
+            "af", "am" -> "en-us"
+            "bf", "bm" -> "en-gb"
+            "ef", "em" -> "es"
+            "ff" -> "fr-fr"
+            "hf", "hm" -> "hi"
+            "if", "im" -> "it"
+            "jf", "jm" -> "ja"
+            "pf", "pm" -> "pt-br"
+            // Chinese voices deliberately return "": CJK text already takes the
+            // dedicated Chinese path, and forcing "cmn" would phonemize any
+            // embedded English/Latin words with Mandarin rules.
+            else -> ""
+        }
+    }
 }

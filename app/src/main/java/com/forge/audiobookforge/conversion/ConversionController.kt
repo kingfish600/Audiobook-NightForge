@@ -34,8 +34,21 @@ class ConversionController {
     private val _state = MutableStateFlow<ConversionState>(ConversionState.Idle)
     val state: StateFlow<ConversionState> = _state.asStateFlow()
 
+    /**
+     * Cancellation is tracked per RUN, not with a single boolean. A boolean was
+     * cleared by the next beginRun(), so a worker still inside a long native
+     * render would read "not cancelled" and keep writing the same chapter file
+     * as its replacement. Each run now carries its own id.
+     */
     @Volatile
-    var cancelRequested: Boolean = false
+    private var cancelledRunId: Long = -1L
+
+    /** Ask the CURRENT run to stop at its next chunk boundary. */
+    fun requestStop() {
+        cancelledRunId = runSeq
+    }
+
+    fun isCancelled(runId: Long): Boolean = cancelledRunId == runId
 
     /** After Stop is tapped, ignore progress updates from the dying run until it exits. */
     @Volatile
@@ -46,7 +59,6 @@ class ConversionController {
 
     /** Called at the start of every worker run; returns the id of this run. */
     fun beginRun(): Long {
-        cancelRequested = false
         suppressUpdates = false
         runSeq += 1
         return runSeq
@@ -61,7 +73,6 @@ class ConversionController {
         if (runId != runSeq) return
         suppressUpdates = false
         if (_state.value !is ConversionState.Idle) {
-            cancelRequested = false
             _state.value = ConversionState.Idle
         }
     }
@@ -86,7 +97,7 @@ class ConversionController {
     }
 
     fun idle() {
-        cancelRequested = false
+        cancelledRunId = -1L
         _state.value = ConversionState.Idle
     }
 }

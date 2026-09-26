@@ -1,5 +1,6 @@
 package com.forge.audiobookforge.tts
 
+import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.GeneratedAudio
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
@@ -136,8 +137,21 @@ class KokoroEngine {
     fun numSpeakers(): Int = try { tts?.numSpeakers() ?: 0 } catch (_: Throwable) { 0 }
 
     @Synchronized
-    fun synthesize(text: String, sid: Int, speed: Float): GeneratedAudio? =
-        tts?.generate(text = text, sid = sid, speed = speed)
+    fun synthesize(text: String, sid: Int, speed: Float): GeneratedAudio? {
+        val engine = tts ?: return null
+        // Kokoro >= 1.0 chooses its phonemizer language from
+        // generationConfig.extra["lang"] (sherpa's offline-tts-kokoro-impl.h).
+        // Without it the engine uses the bundle default, so every non-English
+        // voice read its text with an English accent.
+        if (kind == ModelManager.EngineKind.KOKORO) {
+            val lang = Voices.langForSid(sid)
+            if (lang.isNotEmpty()) {
+                val cfg = GenerationConfig(speed = speed, sid = sid, extra = mapOf("lang" to lang))
+                runCatching { engine.generateWithConfig(text, cfg) }.getOrNull()?.let { return it }
+            }
+        }
+        return engine.generate(text = text, sid = sid, speed = speed)
+    }
 
     /**
      * Terminal. Frees the native engine. Because a

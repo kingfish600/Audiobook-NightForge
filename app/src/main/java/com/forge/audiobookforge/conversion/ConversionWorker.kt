@@ -27,6 +27,7 @@ import com.forge.audiobookforge.data.model.ChapterStatus
 import com.forge.audiobookforge.tts.KokoroEngine
 import com.forge.audiobookforge.util.TextOps
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -128,11 +129,11 @@ class ConversionWorker(
             }
             log("rendering ${if (useOpus) "opus" else "aac"} at ${sampleRate}Hz (engine native ${engineRate}Hz)")
             for (ch in book.chapters) {
-                if (controller.cancelRequested) break
+                if (isStopped || controller.isCancelled(runId)) break
                 val existing = ch.audioFile?.let { File(repo.audioDir(bookId), it) }
                 if (ch.status == ChapterStatus.DONE && existing != null && existing.isFile) continue
 
-                renderChapter(engine, repo, controller, book, ch, sampleRate, settings.segmentChars.value, useOpus, outExt)
+                renderChapter(engine, repo, controller, runId, book, ch, sampleRate, settings.segmentChars.value, useOpus, outExt)
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
                 val doneFile = File(repo.audioDir(bookId), "%03d.$outExt".format(ch.index))
@@ -165,6 +166,7 @@ class ConversionWorker(
         engine: KokoroEngine,
         repo: LibraryRepository,
         controller: ConversionController,
+        runId: Long,
         book: Book,
         ch: Chapter,
         sampleRate: Int,
@@ -202,7 +204,12 @@ class ConversionWorker(
         }
         try {
             for ((n, chunk) in chunks.withIndex()) {
-                if (controller.cancelRequested) throw kotlinx.coroutines.CancellationException("stopped")
+                // Prompt response to a WorkManager/scope cancellation, and to a
+                // stop aimed at THIS run (a newer run must not cancel this one).
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (isStopped || controller.isCancelled(runId)) {
+                    throw kotlinx.coroutines.CancellationException("stopped")
+                }
                 val t0 = System.nanoTime()
                 val audio = checkNotNull(engine.synthesize(chunk, book.voiceSid, book.speed)) { "Engine not loaded" }
                 val pcm = if (audio.sampleRate != sampleRate) {
@@ -253,7 +260,7 @@ class ConversionWorker(
             // User stop OR system stop (constraint lost, app swiped away):
             // leave the chapter pending so resume picks it up cleanly. Only a
             // genuine synthesis error deserves the FAILED badge.
-            ch.status = if (controller.cancelRequested || isStopped) {
+            ch.status = if (isStopped || controller.isCancelled(runId)) {
                 ChapterStatus.PENDING
             } else {
                 ChapterStatus.FAILED
@@ -358,7 +365,7 @@ class ConversionWorker(
         }
 
         fun cancel(context: Context, bookId: String, controller: ConversionController) {
-            controller.cancelRequested = true
+            controller.requestStop()
             WorkManager.getInstance(context).cancelUniqueWork("convert_$bookId")
         }
     }
