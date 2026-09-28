@@ -78,6 +78,13 @@ class ModelManager(private val context: Context) {
     /** Guards against concurrent installs (double tap on Get/Download). */
     private val inFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    /**
+     * Fired whenever the installed set or the active engine changes. The caller
+     * releases the native engine so it reloads from the right bundle (a deleted
+     * bundle must not stay mapped, and a switched-to engine must actually load).
+     */
+    var onModelChanged: (() -> Unit)? = null
+
     private val _ui = MutableStateFlow(detect())
     val ui: StateFlow<ModelUi> = _ui.asStateFlow()
 
@@ -86,10 +93,14 @@ class ModelManager(private val context: Context) {
         prefs().getString("active_model_path", null)?.let { path ->
             val dir = File(path)
             if (isValidBundle(dir)) {
+                // An explicit choice may be a catalog engine or a USB drop-in bundle;
+                // report the catalog id when it matches so the settings list can mark
+                // the right row as active.
+                val catalogId = CATALOG.firstOrNull { dirFor(it).absolutePath == dir.absolutePath }?.id
                 return ModelUi(
                     ready = true,
                     modelDir = dir,
-                    optionId = "local:${dir.name}",
+                    optionId = catalogId ?: "local:${dir.name}",
                     int8Available = File(dir, "model.int8.onnx").isFile(),
                 )
             } else {
@@ -185,17 +196,17 @@ class ModelManager(private val context: Context) {
             }
             backup.deleteRecursively()
 
-            // Verified: now enforce one-model-at-a-time.
-            CATALOG.filter { it.id != option.id }.forEach { other ->
-                File(modelsRoot, other.id).deleteRecursively()
-            }
-            if (option.id != "kokoro") File(modelsRoot, "kokoro").deleteRecursively()
+            // Engines are kept side by side until the user deletes them. Installing
+            // one makes it the active choice (previously the others were deleted,
+            // and that deletion is what made the new engine active by default).
+            prefs().edit().putString("active_model_path", target.absolutePath).apply()
+            onModelChanged?.invoke()
 
             val detected = detect()
             update {
                 detected.copy(
                     phaseLabel = "Ready",
-                    notice = "${option.title} installed — previous model removed",
+                    notice = "${option.title} installed and made active — other engines stay installed.",
                 )
             }
             inFlight.set(false)
@@ -212,13 +223,41 @@ class ModelManager(private val context: Context) {
         }
     }
 
-    fun deleteModel() {
+    /** Catalog ids whose bundles are actually on disk right now. */
+    fun installedOptionIds(): Set<String> =
+        CATALOG.filter { isValidBundle(dirFor(it)) }.map { it.id }.toSet()
+
+    /** Make an already-installed engine the active one. */
+    fun useModel(id: String) {
+        val opt = CATALOG.firstOrNull { it.id == id } ?: return
+        val dir = dirFor(opt)
+        if (!isValidBundle(dir)) return
+        prefs().edit().putString("active_model_path", dir.absolutePath).apply()
+        _ui.value = detect()
+        onModelChanged?.invoke()
+    }
+
+    /** Remove ONE installed engine; falls back to another installed one if it was active. */
+    fun deleteModel(id: String) {
+        val opt = CATALOG.firstOrNull { it.id == id }
+        val dir = if (opt != null) dirFor(opt) else File(modelsRoot, id)
+        dir.deleteRecursively()
+        if (prefs().getString("active_model_path", null) == dir.absolutePath) {
+            prefs().edit().remove("active_model_path").apply()
+        }
+        _ui.value = detect()
+        onModelChanged?.invoke()
+    }
+
+    /** Remove every installed engine. */
+    fun deleteAllModels() {
         val external = externalModelsRoot?.canonicalPath
         modelsRoot.listFiles { f -> f.isDirectory }?.forEach { f ->
             if (external == null || f.canonicalPath != external) f.deleteRecursively()
         }
         prefs().edit().remove("active_model_path").apply()
         _ui.value = detect()
+        onModelChanged?.invoke()
     }
 
     private fun update(f: (ModelUi) -> ModelUi) { _ui.value = f(_ui.value) }
@@ -232,6 +271,16 @@ class ModelManager(private val context: Context) {
         conn.connect()
         check(conn.responseCode in 200..299) { "HTTP ${conn.responseCode} downloading model" }
         val total = conn.contentLengthLong
+        // Engines stay installed until deleted now, so refuse to start a download
+        // that cannot also be extracted (roughly archive size again) plus headroom.
+        if (total > 0) {
+            val free = android.os.StatFs(modelsRoot.absolutePath).availableBytes
+            val needed = total * 2 + 50L * 1024 * 1024
+            check(free > needed) {
+                "Not enough free space: about ${needed / (1024 * 1024)} MB needed, " +
+                    "${free / (1024 * 1024)} MB available."
+            }
+        }
         conn.inputStream.use { input ->
             dest.outputStream().use { out ->
                 val buf = ByteArray(64 * 1024)

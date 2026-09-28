@@ -48,7 +48,8 @@ fun SettingsScreen() {
                 Text("TTS engine", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "One engine is installed at a time — getting another replaces it.",
+                    "Install as many engines as you like — each stays until you remove it. " +
+                        "Switching takes effect on the next preview or render, with no restart.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -65,29 +66,45 @@ fun SettingsScreen() {
                     )
                 }
                 Spacer(Modifier.height(8.dp))
+                val installedIds = container.models.installedOptionIds()
                 com.forge.audiobookforge.tts.ModelManager.CATALOG.forEach { opt ->
-                    val installed = modelUi.optionId == opt.id
+                    val installed = opt.id in installedIds
+                    val active = modelUi.optionId == opt.id
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(opt.title, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                opt.subtitle,
+                                opt.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (active) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                (if (active) "In use · " else "") + opt.subtitle,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (active) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         when {
-                            installed -> Text(
-                                "Installed",
+                            active -> Text(
+                                "Active",
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelLarge,
                             )
+                            installed && !modelUi.downloading -> TextButton(
+                                onClick = { container.models.useModel(opt.id) },
+                            ) { Text("Use") }
                             !modelUi.downloading -> TextButton(
                                 onClick = { scope.launch { container.models.download(opt) } },
                             ) { Text("Get") }
+                        }
+                        if (installed && !modelUi.downloading) {
+                            TextButton(onClick = { container.models.deleteModel(opt.id) }) {
+                                Text("Remove")
+                            }
                         }
                     }
                 }
@@ -106,8 +123,12 @@ fun SettingsScreen() {
                                 else MaterialTheme.colorScheme.primary,
                     )
                 }
-                Row {
-                    TextButton(onClick = { container.models.deleteModel() }) { Text("Delete installed model") }
+                if (installedIds.isNotEmpty()) {
+                    Row {
+                        TextButton(onClick = { container.models.deleteAllModels() }) {
+                            Text("Remove all engines")
+                        }
+                    }
                 }
             }
         }

@@ -21,6 +21,12 @@ class AppContainer(private val context: Context) : ContainerApi {
     override val conversion = ConversionController()
     override val player = PlayerController(context, library)
 
+    init {
+        // A model change invalidates the loaded engine: the bundle may have been
+        // deleted, and a stale engine answers numSpeakers() for the wrong model.
+        models.onModelChanged = { kokoroEngine.release() }
+    }
+
     /**
      * Synthesize a short sample with the book's current voice+speed and play it.
      * Returns null on success or an error message.
