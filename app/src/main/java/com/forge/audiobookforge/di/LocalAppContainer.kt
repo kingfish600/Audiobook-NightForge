@@ -25,6 +25,15 @@ interface ContainerApi {
 
     /** Speak a sample sentence with a cloned voice so the user can judge it. */
     suspend fun previewClone(name: String): String?
+
+    /** True once the optional speech recogniser is installed. */
+    fun transcriberReady(): Boolean
+
+    /** Downloads the recogniser (does IO internally; call from a coroutine). */
+    suspend fun installTranscriber()
+
+    /** Writes the words spoken in [bytes] (a WAV). Null when it cannot be read. */
+    suspend fun transcribeClip(bytes: ByteArray): String?
 }
 
 val LocalAppContainer = staticCompositionLocalOf<ContainerApi> {

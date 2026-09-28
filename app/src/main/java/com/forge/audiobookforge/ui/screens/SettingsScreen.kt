@@ -282,6 +282,8 @@ fun SettingsScreen() {
                     )
                 }
 
+                var transcribeStatus by remember { mutableStateOf<String?>(null) }
+
                 if (askTranscript) {
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { askTranscript = false },
@@ -289,8 +291,8 @@ fun SettingsScreen() {
                         text = {
                             Column {
                                 Text(
-                                    "Type the words spoken in the recording, exactly. The clone copies " +
-                                        "the voice; this text is how it learns which sounds belong to it.",
+                                    "This voice needs the words spoken in the clip, exactly. The clone " +
+                                        "copies the voice; the text is how it learns which sounds are its own.",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Spacer(Modifier.height(8.dp))
@@ -300,6 +302,35 @@ fun SettingsScreen() {
                                     label = { Text("Transcript") },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+                                TextButton(enabled = pendingWav != null, onClick = {
+                                    val data = pendingWav ?: return@TextButton
+                                    scope.launch {
+                                        transcribeStatus = if (container.transcriberReady())
+                                            "Listening to your clip…"
+                                        else "Downloading the transcriber (≈111 MB, once)…"
+                                        runCatching {
+                                            if (!container.transcriberReady()) container.installTranscriber()
+                                            transcribeStatus = "Listening to your clip…"
+                                            container.transcribeClip(data)
+                                        }.onSuccess { heard ->
+                                            transcribeStatus = when {
+                                                heard.isNullOrBlank() ->
+                                                    "Could not make out words — please type them."
+                                                else -> "Filled in from the clip. Check it before saving."
+                                            }
+                                            if (!heard.isNullOrBlank()) transcript = heard
+                                        }.onFailure {
+                                            transcribeStatus = "Transcription failed: ${it.message ?: "unknown error"}"
+                                        }
+                                    }
+                                }) { Text("Type it for me") }
+                                transcribeStatus?.let {
+                                    Text(
+                                        it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
                         },
                         confirmButton = {

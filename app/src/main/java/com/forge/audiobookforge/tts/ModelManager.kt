@@ -293,6 +293,33 @@ class ModelManager(private val context: Context) {
 
     private fun update(f: (ModelUi) -> ModelUi) { _ui.value = f(_ui.value) }
 
+    /**
+     * Fetches an auxiliary bundle (currently the optional speech recogniser used to
+     * transcribe clone references) into its own directory, reusing the download and
+     * extraction path the engines already rely on. Extraction is staged: a partial
+     * or failed fetch never leaves a half-written model behind.
+     */
+    fun fetchBundle(url: String, destDir: File, onPhase: (String) -> Unit = {}) {
+        val stage = File(context.cacheDir, "${destDir.name}.incoming")
+        stage.deleteRecursively()
+        stage.mkdirs()
+        try {
+            onPhase("Downloading…")
+            val archive = File(stage, "bundle.tar.bz2")
+            downloadFile(url, archive)
+            onPhase("Extracting…")
+            val unpacked = File(stage, "unpacked").apply { mkdirs() }
+            extractTarBz2(archive, unpacked) { }
+            // Bundles carry a single top-level directory; hoist it.
+            val inner = unpacked.listFiles { f -> f.isDirectory }?.firstOrNull() ?: unpacked
+            destDir.deleteRecursively()
+            destDir.parentFile?.mkdirs()
+            check(inner.renameTo(destDir)) { "Could not finish installing the bundle." }
+        } finally {
+            stage.deleteRecursively()
+        }
+    }
+
     private fun downloadFile(urlStr: String, dest: File) {
         val conn = URL(urlStr).openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000

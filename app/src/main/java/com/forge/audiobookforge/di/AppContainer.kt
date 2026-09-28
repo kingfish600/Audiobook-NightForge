@@ -20,6 +20,24 @@ class AppContainer(private val context: Context) : ContainerApi {
     override val kokoroEngine = KokoroEngine()
     override val conversion = ConversionController()
     override val player = PlayerController(context, library)
+    private val transcriber = com.forge.audiobookforge.tts.Transcriber(context, models)
+
+    override fun transcriberReady(): Boolean = transcriber.isReady()
+
+    override suspend fun installTranscriber() = withContext(Dispatchers.IO) { transcriber.install() }
+
+    override suspend fun transcribeClip(bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        val tmp = File(context.cacheDir, "clip-to-transcribe.wav")
+        try {
+            tmp.writeBytes(bytes)
+            transcriber.transcribe(tmp)
+        } catch (e: Exception) {
+            null
+        } finally {
+            tmp.delete()
+        }
+    }
+
     override val clones = com.forge.audiobookforge.tts.CloneStore(
         File(context.filesDir, "clones").apply { mkdirs() },
     )
