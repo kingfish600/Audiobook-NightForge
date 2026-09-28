@@ -207,16 +207,24 @@ fun SettingsScreen() {
                             )
                         }
                         TextButton(onClick = {
-                            scope.launch {
-                                cloneStatus = "Speaking as ${c.name}…"
-                                cloneStatus = container.previewClone(c.name) ?: "That is how ${c.name} sounds."
-                            }
-                        }) { Text("Hear") }
-                        TextButton(onClick = {
                             container.clones.delete(c.name)
                             cloneList = container.clones.list()
                             cloneStatus = "Removed ${c.name}."
                         }) { Text("Remove") }
+                    }
+                    Row(Modifier.padding(start = 4.dp, bottom = 6.dp)) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                cloneStatus = "Speaking as ${c.name}…"
+                                cloneStatus = container.previewClone(c.name)
+                                    ?: "That is how ${c.name} sounds."
+                            }
+                        }) { Text("Hear the clone") }
+                        TextButton(onClick = {
+                            // Play the reference itself, to compare before trusting the clone.
+                            container.player.playPreview(c.wav)
+                            cloneStatus = "Playing the clip ${c.name} was cloned from."
+                        }) { Text("Hear the original") }
                     }
                 }
 
@@ -244,6 +252,13 @@ fun SettingsScreen() {
                         }) { Text("Import engine samples") }
                     }
                 }
+                Text(
+                    "Your installed engine decides which languages it can speak — ZipVoice is " +
+                        "Chinese + English, so a Spanish or French clip will clone poorly until a " +
+                        "matching engine is installed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     "Tip: 5–15 seconds of clean speech, and the transcript typed exactly as spoken. " +
                         "A clip with background noise or a guessed transcript clones badly.",
@@ -387,6 +402,22 @@ fun SettingsScreen() {
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                val steps by container.settings.cloneSteps.collectAsState()
+                Spacer(Modifier.height(8.dp))
+                Text("Cloning steps: $steps")
+                Text(
+                    "Quality against speed for cloning engines (ZipVoice). Fewer steps render " +
+                        "faster; 4–6 is the usual range, higher can pronounce difficult words better.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = steps.toFloat(),
+                    onValueChange = { container.settings.setCloneSteps(it.toInt()) },
+                    valueRange = 2f..12f,
+                    steps = 9,
                 )
 
                 Spacer(Modifier.height(12.dp))

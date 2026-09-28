@@ -136,7 +136,8 @@ class ConversionWorker(
                 renderChapter(
                     engine, repo, controller, runId, book, ch,
                     container.cloneFor(book),
-                    sampleRate, settings.segmentChars.value, useOpus, outExt,
+                    sampleRate, settings.segmentChars.value, settings.cloneSteps.value,
+                    useOpus, outExt,
                 )
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
@@ -174,6 +175,7 @@ class ConversionWorker(
         book: Book,
         ch: Chapter,
         reference: com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice?,
+        cloneSteps: Int,
         sampleRate: Int,
         segmentLen: Int,
         useOpus: Boolean = false,
@@ -226,7 +228,7 @@ class ConversionWorker(
                 }
                 val t0 = System.nanoTime()
                 val audio = checkNotNull(
-                    engine.synthesize(chunk, sid, book.speed, reference),
+                    engine.synthesize(chunk, sid, book.speed, reference, cloneSteps),
                 ) { "Engine not loaded" }
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)

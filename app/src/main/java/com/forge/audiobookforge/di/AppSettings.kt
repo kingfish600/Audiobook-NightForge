@@ -28,6 +28,13 @@ class AppSettings(context: Context) {
     private val _segmentChars = MutableStateFlow(prefs.getInt(KEY_SEGMENT, 280))
     val segmentChars: StateFlow<Int> = _segmentChars.asStateFlow()
 
+    /**
+     * Flow-matching steps for cloning engines. Fewer steps synthesise faster,
+     * more sound better; the default matches the engine's own.
+     */
+    private val _cloneSteps = MutableStateFlow(prefs.getInt(KEY_CLONE_STEPS, 5).coerceIn(2, 12))
+    val cloneSteps: StateFlow<Int> = _cloneSteps.asStateFlow()
+
     private val _codec = MutableStateFlow(prefs.getString(KEY_CODEC, "opus") ?: "opus")
     val codec: StateFlow<String> = _codec.asStateFlow()
 
@@ -60,7 +67,14 @@ class AppSettings(context: Context) {
         prefs.edit().putInt(KEY_SEGMENT, snapped).apply(); _segmentChars.value = snapped
     }
 
+    fun setCloneSteps(n: Int) {
+        val v = n.coerceIn(2, 12)
+        prefs.edit().putInt(KEY_CLONE_STEPS, v).apply()
+        _cloneSteps.value = v
+    }
+
     companion object {
+        const val KEY_CLONE_STEPS = "clone_steps"
         const val KEY_THREADS = "num_threads"
         const val KEY_CHARGING = "require_charging"
         const val KEY_SEGMENT = "segment_chars"

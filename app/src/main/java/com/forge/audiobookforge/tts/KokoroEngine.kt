@@ -191,6 +191,7 @@ class KokoroEngine {
         sid: Int,
         speed: Float,
         reference: ReferenceVoice? = null,
+        steps: Int = 5,
     ): GeneratedAudio? {
         val engine = tts ?: return null
         // Zero-shot cloning engines speak from a reference clip + its transcript.
@@ -205,6 +206,8 @@ class KokoroEngine {
                 referenceAudio = audio.first,
                 referenceSampleRate = audio.second,
                 referenceText = ref.text,
+                // Flow-matching steps: the quality/speed dial for cloning engines.
+                numSteps = steps.coerceIn(2, 16),
             )
             return runCatching { engine.generateWithConfig(text, cfg) }.getOrNull()
         }

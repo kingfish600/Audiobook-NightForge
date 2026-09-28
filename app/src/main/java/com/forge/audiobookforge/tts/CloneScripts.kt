@@ -67,6 +67,46 @@ object CloneScripts {
             note = "Best coverage if you have the patience — a little over ten seconds.",
         ),
         Script(
+            language = "Español",
+            title = "Corto · cotidiano",
+            text = "Buenos días, vecina. ¿Has visto cómo brilla el río esta mañana? Yo salí " +
+                "temprano a caminar por el parque y el aire fresco me recordó a mi pueblo. " +
+                "Cuando vuelvas, te preparo un café y hablamos un rato de la vida.",
+            note = "Cubre la rr, la ll, la j y la z.",
+        ),
+        Script(
+            language = "Français",
+            title = "Court · quotidien",
+            text = "Bonjour, comment allez-vous aujourd'hui ? Ce matin, le ciel était gris et " +
+                "j'ai décidé de marcher le long de la rivière. Il fait chaud dans la maison, " +
+                "alors j'ouvre la fenêtre et je regarde les feuilles tomber.",
+            note = "Couvre les voyelles nasales, le r, le ch et le j.",
+        ),
+        Script(
+            language = "Deutsch",
+            title = "Kurz · Alltag",
+            text = "Guten Morgen! Hast du schon gehört, dass der Zug heute später kommt? Ich " +
+                "warte hier am Bahnhof und trinke einen Kaffee. Wenn es nicht regnet, gehe ich " +
+                "zu Fuß durch den Park nach Hause. Die Vögel singen über den Dächern.",
+            note = "Deckt ch, z, w, ü/ö/ä und ng ab.",
+        ),
+        Script(
+            language = "Italiano",
+            title = "Breve · quotidiano",
+            text = "Buongiorno! Hai visto quanto è bello il cielo stamattina? Ho camminato " +
+                "lungo il fiume e ho ascoltato il rumore dell'acqua. Più tardi preparo il pranzo " +
+                "e ti racconto tutto con calma. Gli alberi del giardino sono pieni di foglie.",
+            note = "Copre gl, z, le doppie e le vocali accentate.",
+        ),
+        Script(
+            language = "Português",
+            title = "Curto · cotidiano",
+            text = "Bom dia! Você já viu como o mar está calmo hoje? Eu caminhei pela praia cedo " +
+                "e ouvi as ondas devagar. Depois, tomei um café na esquina e falei com o vizinho " +
+                "sobre o trabalho. Amanhã, se fizer sol, vamos os dois até o farol.",
+            note = "Cobre nh, lh, ão e o s final chiado.",
+        ),
+        Script(
             language = "中文",
             title = "普通 · 日常",
             text = "今天早上的天气特别好，阳光穿过窗户照在地板上。我喜欢在这样的日子里慢慢地喝茶，" +

@@ -82,7 +82,9 @@ class AppContainer(private val context: Context) : ContainerApi {
         if (kokoroEngine.kind == ModelManager.EngineKind.ZIPVOICE && reference == null) {
             return@withContext "Add a voice clone first (Settings → Cloned voices), then preview."
         }
-        val audio = kokoroEngine.synthesize(PREVIEW_TEXT, sid, book.speed, reference)
+        val audio = kokoroEngine.synthesize(
+            PREVIEW_TEXT, sid, book.speed, reference, settings.cloneSteps.value,
+        )
             ?: return@withContext "Synthesis failed — engine not loaded."
         if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
 
@@ -100,6 +102,7 @@ class AppContainer(private val context: Context) : ContainerApi {
         val audio = kokoroEngine.synthesize(
             PREVIEW_TEXT, 0, 1f,
             com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice(clone.wav, clone.text),
+            settings.cloneSteps.value,
         ) ?: return@withContext "Synthesis failed — is a cloning engine (ZipVoice) installed?"
         if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
         val f = File(context.cacheDir, "clone_preview.wav")
