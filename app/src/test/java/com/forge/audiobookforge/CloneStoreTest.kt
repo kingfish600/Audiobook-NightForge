@@ -124,6 +124,20 @@ class CloneStoreValidationTest {
         assertTrue(problem!!.contains("at least"))
     }
 
+    /**
+     * The boundary itself, with clean clips either side of it. A 1.8-second clip must
+     * be refused (1.80 < 2.0) and a 2.5-second one accepted — the device UI path makes
+     * this awkward to read reliably, so it is pinned here instead.
+     */
+    @Test
+    fun theTwoSecondBoundaryIsExact() {
+        val store = CloneStore(tempDir())
+        assertNotNull("1.8s is below the minimum", store.problemWith(wav(1.8)))
+        assertNull("2.5s is comfortably above it", store.problemWith(wav(2.5)))
+        assertNull("exactly the minimum is allowed", store.problemWith(wav(CloneStore.MIN_REFERENCE_SECONDS)))
+        assertNotNull("just under the minimum is refused", store.problemWith(wav(1.99)))
+    }
+
     @Test
     fun theLengthLimitMatchesTheRecorder() {
         assertEquals(2.0, CloneStore.MIN_REFERENCE_SECONDS, 0.001)

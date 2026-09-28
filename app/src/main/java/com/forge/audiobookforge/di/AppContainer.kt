@@ -69,8 +69,20 @@ class AppContainer(private val context: Context) : ContainerApi {
             // A cloning engine ships reference clips with their transcripts —
             // import them so voice cloning works with zero setup. Idempotent.
             models.ui.value.modelDir?.let { dir ->
-                if (ModelManager.bundleKind(dir) == ModelManager.EngineKind.ZIPVOICE) {
-                    runCatching { clones.importBundled(dir) }
+                val kind = ModelManager.bundleKind(dir)
+                if (kind == ModelManager.EngineKind.ZIPVOICE) {
+                    // Logged, not silently swallowed: a failure here means "zero setup"
+                    // quietly does not happen, which is exactly what went unnoticed.
+                    val result = runCatching { clones.importBundled(dir) }
+                    android.util.Log.i(
+                        "NightForge",
+                        "clones auto-import: " + (
+                            result.getOrNull()?.let { "$it clip(s) from ${dir.name}" }
+                                ?: "FAILED (${result.exceptionOrNull()?.message})"
+                            ),
+                    )
+                } else {
+                    android.util.Log.i("NightForge", "clones auto-import skipped: ${dir.name} is $kind")
                 }
             }
         }
