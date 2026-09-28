@@ -18,6 +18,11 @@ class CloneStore(private val root: File) {
 
     data class Clone(val name: String, val wav: File, val text: String)
 
+    companion object {
+        /** Below this a reference teaches the model almost nothing. */
+        const val MIN_REFERENCE_SECONDS = 2.0
+    }
+
     private fun wavFor(name: String) = File(root, "$name.wav")
     private fun txtFor(name: String) = File(root, "$name.txt")
 
@@ -39,6 +44,27 @@ class CloneStore(private val root: File) {
     /** True when the clip parses as audio we can feed to the engine. */
     fun isUsable(wav: File): Boolean = RefAudio.read(wav) != null
 
+    /** Same check for bytes straight off the file picker, before anything is saved. */
+    fun canUse(bytes: ByteArray): Boolean = problemWith(bytes) == null
+
+    /**
+     * Why a clip cannot be used, or null when it is fine. Checked as soon as a file
+     * is chosen so the user is not told after typing a transcript.
+     */
+    fun problemWith(bytes: ByteArray): String? {
+        val audio = RefAudio.readBytes(bytes)
+            ?: return "That file is not audio the engine can use. Use a WAV file " +
+                "(16-bit PCM or 32-bit float, 8–96 kHz)."
+        // A file that parses can still be useless: a truncated download gives a valid
+        // header with almost no audio in it, which would clone into noise.
+        val seconds = audio.first.size.toDouble() / audio.second
+        if (seconds < MIN_REFERENCE_SECONDS) {
+            return "That clip is only ${"%.2f".format(seconds)}s long. Cloning needs at least " +
+                "${MIN_REFERENCE_SECONDS.toInt()} seconds of speech."
+        }
+        return null
+    }
+
     /**
      * Adds (or replaces) a clone. [wavBytes] must be a WAV the engine can read —
      * refused up front rather than crashing later inside native code.
@@ -50,9 +76,7 @@ class CloneStore(private val root: File) {
         val clean = text.trim()
         if (clean.isEmpty()) return "Type the words spoken in the clip — the engine needs them to clone the voice."
         if (clean.length > 600) return "Keep the transcript under 600 characters (a few sentences is plenty)."
-        if (RefAudio.readBytes(wavBytes) == null) {
-            return "That audio could not be read. Use a WAV file (16-bit PCM or 32-bit float, 8–96 kHz)."
-        }
+        problemWith(wavBytes)?.let { return it }
         root.mkdirs()
         wavFor(safe).writeBytes(wavBytes)
         txtFor(safe).writeText(clean)

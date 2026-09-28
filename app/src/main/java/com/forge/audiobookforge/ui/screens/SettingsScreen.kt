@@ -168,8 +168,12 @@ fun SettingsScreen() {
                         val bytes = runCatching {
                             cloneCtx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         }.getOrNull()
+                        val problem = bytes?.let { container.clones.problemWith(it) }
                         if (bytes == null) {
                             cloneStatus = "Could not read that file."
+                        } else if (problem != null) {
+                            // Say so now, not after they have typed a transcript.
+                            cloneStatus = problem
                         } else {
                             pendingWav = bytes
                             pendingName = runCatching {
