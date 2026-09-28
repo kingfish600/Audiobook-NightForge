@@ -19,3 +19,7 @@ app/src/main/jniLibs/*.tar.bz2
 keystore.properties
 *.jks
 *.keystore
+
+# Review reports (from parallel model review sessions) must never dirty the tree
+REVIEW-*.md
+review-*.md
