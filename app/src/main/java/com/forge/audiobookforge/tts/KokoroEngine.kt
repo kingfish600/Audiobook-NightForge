@@ -182,6 +182,9 @@ class KokoroEngine {
     /** A cloned voice: the reference clip plus the exact words spoken in it. */
     data class ReferenceVoice(val wav: File, val text: String)
 
+    /** Decoded reference clips, so a long book does not re-parse the WAV per chunk. */
+    private val referenceCache = com.forge.audiobookforge.audio.RefCache()
+
     @Synchronized
     fun synthesize(
         text: String,
@@ -195,7 +198,7 @@ class KokoroEngine {
         // rather than feeding the engine a half-configured request.
         if (kind == ModelManager.EngineKind.ZIPVOICE) {
             val ref = reference ?: return null
-            val audio = com.forge.audiobookforge.audio.RefAudio.read(ref.wav) ?: return null
+            val audio = referenceCache.samples(ref.wav) ?: return null
             val cfg = GenerationConfig(
                 speed = speed,
                 sid = sid,
@@ -235,6 +238,7 @@ class KokoroEngine {
         tts = null
         loadedDir = null
         kind = null
+        referenceCache.clear()
         runCatching { old?.release() }
     }
 
