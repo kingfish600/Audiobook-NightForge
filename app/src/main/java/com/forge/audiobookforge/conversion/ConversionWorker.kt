@@ -133,7 +133,11 @@ class ConversionWorker(
                 val existing = ch.audioFile?.let { File(repo.audioDir(bookId), it) }
                 if (ch.status == ChapterStatus.DONE && existing != null && existing.isFile) continue
 
-                renderChapter(engine, repo, controller, runId, book, ch, sampleRate, settings.segmentChars.value, useOpus, outExt)
+                renderChapter(
+                    engine, repo, controller, runId, book, ch,
+                    container.cloneFor(book),
+                    sampleRate, settings.segmentChars.value, useOpus, outExt,
+                )
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
                 val doneFile = File(repo.audioDir(bookId), "%03d.$outExt".format(ch.index))
@@ -169,6 +173,7 @@ class ConversionWorker(
         runId: Long,
         book: Book,
         ch: Chapter,
+        reference: com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice?,
         sampleRate: Int,
         segmentLen: Int,
         useOpus: Boolean = false,
@@ -220,7 +225,9 @@ class ConversionWorker(
                     throw kotlinx.coroutines.CancellationException("stopped")
                 }
                 val t0 = System.nanoTime()
-                val audio = checkNotNull(engine.synthesize(chunk, sid, book.speed)) { "Engine not loaded" }
+                val audio = checkNotNull(
+                    engine.synthesize(chunk, sid, book.speed, reference),
+                ) { "Engine not loaded" }
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)
                 } else audio.samples

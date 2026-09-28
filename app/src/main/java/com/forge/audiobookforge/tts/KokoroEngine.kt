@@ -8,6 +8,7 @@ import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsZipVoiceModelConfig
 import java.io.File
 
 /**
@@ -110,6 +111,34 @@ class KokoroEngine {
                     debug = false,
                     provider = "cpu",
                 )
+                ModelManager.EngineKind.ZIPVOICE -> {
+                    val tokens = File(modelDir, "tokens.txt")
+                    if (!tokens.isFile) return "ZipVoice bundle is missing tokens.txt"
+                    fun find(prefix: String): File? =
+                        modelDir.listFiles { f -> f.isFile && f.name.startsWith(prefix) }
+                            ?.sortedByDescending { it.name.contains("int8") }
+                            ?.firstOrNull()
+                    val encoder = find("encoder") ?: return "ZipVoice bundle is missing encoder"
+                    val decoder = find("decoder") ?: return "ZipVoice bundle is missing decoder"
+                    val vocoder = find("vocoder") ?: return "ZipVoice bundle is missing vocoder"
+                    // The bundle ships a single lexicon.txt at its root. Passing an
+                    // empty lexicon path makes native init crash during model load.
+                    val lexicon = listOf(
+                        "lexicon.txt",
+                        "lexicon-zh.txt",
+                        "lexicon-us-en.txt",
+                        "lexicon-gb-en.txt",
+                    ).map { File(modelDir, it) }.filter { it.isFile }
+                        .joinToString(",") { it.absolutePath }
+                    OfflineTtsModelConfig(zipvoice = OfflineTtsZipVoiceModelConfig(
+                        tokens = tokens.absolutePath,
+                        encoder = encoder.absolutePath,
+                        decoder = decoder.absolutePath,
+                        vocoder = vocoder.absolutePath,
+                        dataDir = if (espeak.isDirectory) espeak.absolutePath else "",
+                        lexicon = lexicon,
+                    ))
+                }
                 ModelManager.EngineKind.KITTEN -> {
                     val modelFile = chooseModelFile(modelDir, preferInt8)
                         ?: return "Kitten bundle has no model .onnx"
@@ -150,9 +179,32 @@ class KokoroEngine {
     @Synchronized
     fun numSpeakers(): Int = try { tts?.numSpeakers() ?: 0 } catch (_: Throwable) { 0 }
 
+    /** A cloned voice: the reference clip plus the exact words spoken in it. */
+    data class ReferenceVoice(val wav: File, val text: String)
+
     @Synchronized
-    fun synthesize(text: String, sid: Int, speed: Float): GeneratedAudio? {
+    fun synthesize(
+        text: String,
+        sid: Int,
+        speed: Float,
+        reference: ReferenceVoice? = null,
+    ): GeneratedAudio? {
         val engine = tts ?: return null
+        // Zero-shot cloning engines speak from a reference clip + its transcript.
+        // Without a usable reference there is nothing to clone, so return null
+        // rather than feeding the engine a half-configured request.
+        if (kind == ModelManager.EngineKind.ZIPVOICE) {
+            val ref = reference ?: return null
+            val audio = com.forge.audiobookforge.audio.RefAudio.read(ref.wav) ?: return null
+            val cfg = GenerationConfig(
+                speed = speed,
+                sid = sid,
+                referenceAudio = audio.first,
+                referenceSampleRate = audio.second,
+                referenceText = ref.text,
+            )
+            return runCatching { engine.generateWithConfig(text, cfg) }.getOrNull()
+        }
         // Kokoro >= 1.0 chooses its phonemizer language from
         // generationConfig.extra["lang"] (sherpa's offline-tts-kokoro-impl.h).
         // Without it the engine uses the bundle default, so every non-English

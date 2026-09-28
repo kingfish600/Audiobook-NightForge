@@ -16,8 +16,15 @@ interface ContainerApi {
     val kokoroEngine: KokoroEngine
     val conversion: ConversionController
     val player: PlayerController
+    val clones: com.forge.audiobookforge.tts.CloneStore
 
     suspend fun previewVoice(book: Book): String?
+
+    /** The cloned voice a book should speak with, or null when none applies. */
+    fun cloneFor(book: Book): com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice?
+
+    /** Speak a sample sentence with a cloned voice so the user can judge it. */
+    suspend fun previewClone(name: String): String?
 }
 
 val LocalAppContainer = staticCompositionLocalOf<ContainerApi> {

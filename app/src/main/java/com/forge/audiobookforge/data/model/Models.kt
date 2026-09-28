@@ -25,6 +25,8 @@ data class Book(
     val importedAtEpochMs: Long,
     val chapters: List<Chapter>,
     var voiceSid: Int = 3,          // default voice (see Voices.kt)
+    /** Cloned voice to speak with (see CloneStore); null = the engine's own voices. */
+    var cloneName: String? = null,
     var speed: Float = 1.0f,
 ) {
     val doneCount: Int get() = chapters.count { it.status == ChapterStatus.DONE }

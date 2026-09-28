@@ -20,11 +20,35 @@ class AppContainer(private val context: Context) : ContainerApi {
     override val kokoroEngine = KokoroEngine()
     override val conversion = ConversionController()
     override val player = PlayerController(context, library)
+    override val clones = com.forge.audiobookforge.tts.CloneStore(
+        File(context.filesDir, "clones").apply { mkdirs() },
+    )
+
+    /**
+     * Resolves the cloned voice for a book: its explicit choice, else the first
+     * clone available (so a cloning engine works the moment one exists).
+     */
+    override fun cloneFor(book: com.forge.audiobookforge.data.model.Book):
+        com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice? {
+        val pick = book.cloneName?.let { clones.get(it) } ?: clones.list().firstOrNull()
+        return pick?.let {
+            com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice(it.wav, it.text)
+        }
+    }
 
     init {
         // A model change invalidates the loaded engine: the bundle may have been
         // deleted, and a stale engine answers numSpeakers() for the wrong model.
-        models.onModelChanged = { kokoroEngine.release() }
+        models.onModelChanged = {
+            kokoroEngine.release()
+            // A cloning engine ships reference clips with their transcripts —
+            // import them so voice cloning works with zero setup. Idempotent.
+            models.ui.value.modelDir?.let { dir ->
+                if (ModelManager.bundleKind(dir) == ModelManager.EngineKind.ZIPVOICE) {
+                    runCatching { clones.importBundled(dir) }
+                }
+            }
+        }
     }
 
     /**
@@ -54,11 +78,31 @@ class AppContainer(private val context: Context) : ContainerApi {
 
         val speakers = kokoroEngine.numSpeakers()
         val sid = if (speakers > 0) book.voiceSid.coerceIn(0, speakers - 1) else book.voiceSid
-        val audio = kokoroEngine.synthesize(PREVIEW_TEXT, sid, book.speed)
+        val reference = cloneFor(book)
+        if (kokoroEngine.kind == ModelManager.EngineKind.ZIPVOICE && reference == null) {
+            return@withContext "Add a voice clone first (Settings → Cloned voices), then preview."
+        }
+        val audio = kokoroEngine.synthesize(PREVIEW_TEXT, sid, book.speed, reference)
             ?: return@withContext "Synthesis failed — engine not loaded."
         if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
 
         val f = File(context.cacheDir, "voice_preview.wav")
+        Wav.write(f, audio.samples, audio.sampleRate)
+        player.playPreview(f)
+        null
+    }
+
+    override suspend fun previewClone(name: String): String? = withContext(Dispatchers.IO) {
+        val modelDir = models.ui.value.modelDir
+            ?: return@withContext "Install a cloning engine first (Settings → TTS engine)."
+        kokoroEngine.load(modelDir, settings.numThreads.value)?.let { return@withContext it }
+        val clone = clones.get(name) ?: return@withContext "That voice is no longer in the library."
+        val audio = kokoroEngine.synthesize(
+            PREVIEW_TEXT, 0, 1f,
+            com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice(clone.wav, clone.text),
+        ) ?: return@withContext "Synthesis failed — is a cloning engine (ZipVoice) installed?"
+        if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
+        val f = File(context.cacheDir, "clone_preview.wav")
         Wav.write(f, audio.samples, audio.sampleRate)
         player.playPreview(f)
         null

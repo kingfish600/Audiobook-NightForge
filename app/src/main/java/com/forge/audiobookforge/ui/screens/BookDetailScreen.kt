@@ -137,17 +137,31 @@ fun BookDetailScreen(bookId: String?) {
                         else activeModelDir?.let { ModelManager.bundleKind(it) }
                     val speakerCount = if (loadedIsActive) container.kokoroEngine.numSpeakers() else 0
                     val isKokoro = effectiveKind == null || effectiveKind == ModelManager.EngineKind.KOKORO
+                    // A cloning engine has no voices of its own — it speaks as whichever
+                    // reference clip you give it, so the picker offers the cloned-voice
+                    // library instead of a speaker list.
+                    val cloneMode = effectiveKind == ModelManager.EngineKind.ZIPVOICE
+                    val cloneOptions = if (cloneMode) container.clones.list() else emptyList()
                     val voiceOptions: List<Voices.Voice> = when {
+                        cloneMode -> emptyList()
                         isKokoro -> Voices.ALL
                         loadedIsActive && speakerCount > 1 ->
                             (0 until speakerCount).map { Voices.Voice(it, "Speaker ${it + 1}", "") }
                         else -> emptyList()
                     }
-                    val singleVoice = if (loadedIsActive) speakerCount <= 1 else !isKokoro
+                    val singleVoice = when {
+                        cloneMode -> cloneOptions.isEmpty()
+                        loadedIsActive -> speakerCount <= 1
+                        else -> !isKokoro
+                    }
                     var voiceMenu by remember { mutableStateOf(false) }
-                    OutlinedButton(enabled = !singleVoice && voiceOptions.isNotEmpty(), onClick = { voiceMenu = true }) {
+                    OutlinedButton(enabled = !singleVoice && (voiceOptions.isNotEmpty() || cloneOptions.isNotEmpty()), onClick = { voiceMenu = true }) {
                         Text(
                             when {
+                                cloneMode -> "Voice: " + (
+                                    book.cloneName ?: cloneOptions.firstOrNull()?.name
+                                        ?: "add one in Settings"
+                                    )
                                 singleVoice || voiceOptions.isEmpty() -> "Voice: built-in"
                                 else -> {
                                     val chosen = voiceOptions.firstOrNull { it.sid == book.voiceSid }
@@ -157,7 +171,18 @@ fun BookDetailScreen(bookId: String?) {
                         )
                     }
                     DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
-                        voiceOptions.forEach { v ->
+                        if (cloneMode) {
+                            cloneOptions.forEach { c ->
+                                DropdownMenuItem(
+                                    text = { Text("🎙 ${c.name} — ${c.text.take(36)}") },
+                                    onClick = {
+                                        book.cloneName = c.name
+                                        container.library.save(book)
+                                        voiceMenu = false
+                                    },
+                                )
+                            }
+                        } else voiceOptions.forEach { v ->
                             DropdownMenuItem(
                                 text = { Text("${v.description} — ${v.name}") },
                                 onClick = {

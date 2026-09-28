@@ -19,7 +19,7 @@ import java.net.URL
  */
 class ModelManager(private val context: Context) {
 
-    enum class EngineKind { KOKORO, VITS, KITTEN }
+    enum class EngineKind { KOKORO, VITS, KITTEN, ZIPVOICE }
 
     data class ModelOption(
         val id: String,
@@ -53,8 +53,24 @@ class ModelManager(private val context: Context) {
     val externalModelsRoot: File? =
         context.getExternalFilesDir(null)?.let { File(it, "models").apply { mkdirs() } }
 
-    fun isValidBundle(dir: File): Boolean =
-        bundleKind(dir) != null && bundleTokensOk(dir) && bundleSizeSane(dir)
+    fun isValidBundle(dir: File): Boolean = bundleComplete(dir)
+
+    /**
+     * Family-aware usability. Tokens and a big enough model are not enough for
+     * every family: a ZipVoice bundle additionally needs its encoder, decoder and
+     * vocoder (the vocoder is fetched separately when the engine is installed).
+     */
+    private fun bundleComplete(dir: File): Boolean {
+        val kind = bundleKind(dir) ?: return false
+        if (!bundleTokensOk(dir) || !bundleSizeSane(dir)) return false
+        if (kind == EngineKind.ZIPVOICE) {
+            return listOf("encoder", "decoder", "vocoder").all { part ->
+                dir.listFiles { f -> f.isFile && f.name.startsWith(part) && f.length() > 100_000 }
+                    ?.isNotEmpty() == true
+            }
+        }
+        return true
+    }
 
     fun listExternal(): List<File> =
         externalModelsRoot?.listFiles { f -> f.isDirectory }
@@ -185,7 +201,22 @@ class ModelManager(private val context: Context) {
             }
             stage.deleteRecursively()
 
-            val newOk = bundleKind(target) != null && bundleTokensOk(target) && bundleSizeSane(target)
+            // ZipVoice bundles ship without their vocoder — the model references a
+            // separate vocos model. Fetch it into the bundle so the engine finds it.
+            if (option.kind == EngineKind.ZIPVOICE) {
+                update { it.copy(indeterminate = true, phaseLabel = "Fetching vocoder (54 MB)…") }
+                val vocoder = File(target, "vocoder.onnx")
+                downloadFile(
+                    "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx",
+                    vocoder,
+                )
+                check(vocoder.length() > 10_000_000) {
+                    "Vocoder download failed — your previous model is untouched."
+                }
+                update { it.copy(indeterminate = false) }
+            }
+
+            val newOk = bundleComplete(target)
             if (!newOk) {
                 target.deleteRecursively()
                 if (hadOld) backup.renameTo(target)
@@ -340,6 +371,7 @@ class ModelManager(private val context: Context) {
             val n = dir.name.lowercase()
             return when {
                 n.startsWith("kitten") -> EngineKind.KITTEN
+                n.startsWith("sherpa-onnx-zipvoice") -> EngineKind.ZIPVOICE
                 File(dir, "voices.bin").isFile() -> EngineKind.KOKORO
                 else -> EngineKind.VITS
             }
@@ -406,6 +438,13 @@ class ModelManager(private val context: Context) {
                 subtitle = "Dutch (nl_NL) voice, VITS · ≈21 MB",
                 url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-nl_NL-pim-medium-int8.tar.bz2",
                 kind = EngineKind.VITS,
+            ),
+            ModelOption(
+                id = "sherpa-onnx-zipvoice-distill",
+                title = "ZipVoice · voice cloning",
+                subtitle = "Clone any voice from a short clip plus its transcript · ≈104 MB (+54 MB vocoder)",
+                url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2",
+                kind = EngineKind.ZIPVOICE,
             ),
         )
     }

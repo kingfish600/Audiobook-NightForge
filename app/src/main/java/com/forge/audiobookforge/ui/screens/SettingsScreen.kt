@@ -20,6 +20,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -129,6 +132,156 @@ fun SettingsScreen() {
                             Text("Remove all engines")
                         }
                     }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Cloned voices", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "A clone is a short recording plus the exact words spoken in it. " +
+                        "The ZipVoice engine then reads your books in that voice — no training, " +
+                        "no cloud, nothing leaves the device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                var cloneList by remember { mutableStateOf(container.clones.list()) }
+                var cloneStatus by remember { mutableStateOf<String?>(null) }
+                var pendingWav by remember { mutableStateOf<ByteArray?>(null) }
+                var pendingName by remember { mutableStateOf("") }
+                var transcript by remember { mutableStateOf("") }
+                var askTranscript by remember { mutableStateOf(false) }
+                val cloneCtx = androidx.compose.ui.platform.LocalContext.current
+
+                val audioPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                ) { uri: android.net.Uri? ->
+                    if (uri != null) {
+                        val bytes = runCatching {
+                            cloneCtx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        }.getOrNull()
+                        if (bytes == null) {
+                            cloneStatus = "Could not read that file."
+                        } else {
+                            pendingWav = bytes
+                            pendingName = runCatching {
+                                cloneCtx.contentResolver
+                                    .query(uri, null, null, null, null)
+                                    ?.use { c ->
+                                        val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                        if (i >= 0 && c.moveToFirst()) c.getString(i) else null
+                                    }
+                            }.getOrNull()?.substringBeforeLast('.')?.take(40) ?: "My voice"
+                            transcript = ""
+                            askTranscript = true
+                        }
+                    }
+                }
+
+                if (cloneList.isEmpty()) {
+                    Text(
+                        "No cloned voices yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                cloneList.forEach { c ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🎙 ${c.name}", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                c.text.take(64),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = {
+                            scope.launch {
+                                cloneStatus = "Speaking as ${c.name}…"
+                                cloneStatus = container.previewClone(c.name) ?: "That is how ${c.name} sounds."
+                            }
+                        }) { Text("Hear") }
+                        TextButton(onClick = {
+                            container.clones.delete(c.name)
+                            cloneList = container.clones.list()
+                            cloneStatus = "Removed ${c.name}."
+                        }) { Text("Remove") }
+                    }
+                }
+
+                Row {
+                    TextButton(onClick = { audioPicker.launch(arrayOf("audio/*")) }) {
+                        Text("Add a voice from a file")
+                    }
+                    val engineDir = container.models.ui.value.modelDir
+                    if (engineDir != null) {
+                        TextButton(onClick = {
+                            val n = container.clones.importBundled(engineDir)
+                            cloneList = container.clones.list()
+                            val clips = java.io.File(engineDir, "test_wavs")
+                                .listFiles()?.count { it.isFile } ?: -1
+                            cloneStatus = when {
+                                n > 0 -> "Imported $n sample voices from the engine."
+                                clips > 0 -> "Found $clips clips in ${engineDir.name}/test_wavs but none imported."
+                                else -> "No test_wavs in ${engineDir.name} (looked for sample clips)."
+                            }
+                        }) { Text("Import engine samples") }
+                    }
+                }
+                Text(
+                    "Tip: 5–15 seconds of clean speech, and the transcript typed exactly as spoken. " +
+                        "A clip with background noise or a guessed transcript clones badly.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                cloneStatus?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+
+                if (askTranscript) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { askTranscript = false },
+                        title = { Text("What does the clip say?") },
+                        text = {
+                            Column {
+                                Text(
+                                    "Type the words spoken in the recording, exactly. The clone copies " +
+                                        "the voice; this text is how it learns which sounds belong to it.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = transcript,
+                                    onValueChange = { transcript = it },
+                                    label = { Text("Transcript") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val bytes = pendingWav
+                                val name = pendingName.ifBlank { "My voice" }
+                                val err = if (bytes == null) "Nothing to import."
+                                          else container.clones.add(name, bytes, transcript)
+                                cloneList = container.clones.list()
+                                cloneStatus = err ?: "Added “$name”. Pick it on any book screen."
+                                askTranscript = false
+                            }) { Text("Save voice") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { askTranscript = false }) { Text("Cancel") }
+                        },
+                    )
                 }
             }
         }
