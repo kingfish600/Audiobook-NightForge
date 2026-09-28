@@ -442,6 +442,19 @@ fun SettingsScreen() {
                     Spacer(Modifier.padding(start = 8.dp))
                     Text("Forge only while charging (pauses when unplugged)")
                 }
+                Text(
+                    if (charging) {
+                        "Recommended. A long render pauses if you unplug, and carries on when you " +
+                            "plug back in — nothing is lost."
+                    } else {
+                        "Off: forging runs on battery and will drain it fast — a full-length book " +
+                            "can flatten a full charge, and the phone will get warm. Fine for a " +
+                            "short test; plug in for anything long."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (charging) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.error,
+                )
                 Spacer(Modifier.height(20.dp))
                 Text("While forging, keep screen", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(6.dp))

@@ -22,7 +22,9 @@ class AppSettings(context: Context) {
     val appleChapters: StateFlow<Boolean> = _appleChapters.asStateFlow()
     fun setAppleChapters(v: Boolean) { prefs.edit().putBoolean(KEY_APPLE_CHAPTERS, v).apply(); _appleChapters.value = v }
 
-    private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, false))
+    // Default ON: an overnight book render can flatten a phone, and a charge-only forge
+    // simply pauses and resumes on plugging in. The user can still turn it off.
+    private val _requireCharging = MutableStateFlow(prefs.getBoolean(KEY_CHARGING, true))
     val requireCharging: StateFlow<Boolean> = _requireCharging.asStateFlow()
 
     private val _segmentChars = MutableStateFlow(prefs.getInt(KEY_SEGMENT, 280))

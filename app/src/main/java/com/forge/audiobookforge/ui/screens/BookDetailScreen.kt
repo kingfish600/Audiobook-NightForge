@@ -230,8 +230,16 @@ fun BookDetailScreen(bookId: String?) {
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "Synthesising a sample. Cloning voices (ZipVoice) take much longer than " +
-                                "Kokoro or Kitten, and the first one also loads the model.",
+                            // Only mention cloning when cloning is what is running: this text
+                            // showed for every engine, so a Kokoro preview explained itself
+                            // with a note about ZipVoice.
+                            if (container.kokoroEngine.kind == ModelManager.EngineKind.ZIPVOICE) {
+                                "Synthesising a sample. Cloning takes much longer than Kokoro or " +
+                                    "Kitten, and the first preview also loads the model."
+                            } else {
+                                "Synthesising a sample. The first preview after switching engines " +
+                                    "also has to load the model."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -319,6 +327,17 @@ fun BookDetailScreen(bookId: String?) {
                             Button(
                                 enabled = runningElsewhere == null && !bookComplete,
                                 onClick = {
+                                    // With the charging constraint on (now the default), tapping Forge while
+                                    // unplugged only queues work that cannot start yet — which reads as a dead
+                                    // button. Say what is happening and how to override it.
+                                    if (container.settings.requireCharging.value && !deviceIsPluggedIn(context)) {
+                                        snackbarScope.launch {
+                                            snackbar.showSnackbar(
+                                                "Waiting for a charger — this starts as soon as you plug in. To forge " +
+                                                    "on battery instead, turn off “Forge only while charging” in Settings."
+                                            )
+                                        }
+                                    }
                                     ConversionWorker.enqueue(context, bookId!!, requireCharging = settings)
                                 if (container.settings.forgeScreen.value == "night") {
                                     runCatching {
@@ -553,4 +572,18 @@ private fun ChapterRow(
 private fun fmtDur(ms: Long): String {
     val totalSec = ms / 1000
     return "%d:%02d".format(totalSec / 60, totalSec % 60)
+}
+
+/**
+ * True while the device is charging. Used only to explain a forge that has been queued
+ * behind the charging constraint, so the action does not look like it did nothing.
+ */
+private fun deviceIsPluggedIn(context: android.content.Context): Boolean {
+    val intent = context.registerReceiver(
+        null,
+        android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED),
+    ) ?: return false
+    val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+    return status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+        status == android.os.BatteryManager.BATTERY_STATUS_FULL
 }
