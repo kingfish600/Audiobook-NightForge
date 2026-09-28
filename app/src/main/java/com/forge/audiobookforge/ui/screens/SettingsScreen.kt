@@ -18,6 +18,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -156,6 +158,7 @@ fun SettingsScreen() {
                 var pendingName by remember { mutableStateOf("") }
                 var transcript by remember { mutableStateOf("") }
                 var askTranscript by remember { mutableStateOf(false) }
+                var showRecorder by remember { mutableStateOf(false) }
                 val cloneCtx = androidx.compose.ui.platform.LocalContext.current
 
                 val audioPicker = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -218,11 +221,16 @@ fun SettingsScreen() {
                 }
 
                 Row {
+                    TextButton(onClick = { showRecorder = true }) {
+                        Text("Record a voice")
+                    }
                     TextButton(onClick = { audioPicker.launch(arrayOf("audio/*")) }) {
                         Text("Add a voice from a file")
                     }
-                    val engineDir = container.models.ui.value.modelDir
-                    if (engineDir != null) {
+                }
+                val engineDir = container.models.ui.value.modelDir
+                if (engineDir != null) {
+                    Row {
                         TextButton(onClick = {
                             val n = container.clones.importBundled(engineDir)
                             cloneList = container.clones.list()
@@ -245,6 +253,18 @@ fun SettingsScreen() {
                 cloneStatus?.let {
                     Spacer(Modifier.height(4.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+
+                if (showRecorder) {
+                    RecordVoiceDialog(
+                        container = container,
+                        onSaved = { saved ->
+                            cloneList = container.clones.list()
+                            cloneStatus = "Added “$saved” from your recording."
+                            showRecorder = false
+                        },
+                        onDismiss = { showRecorder = false },
+                    )
                 }
 
                 if (askTranscript) {
@@ -529,4 +549,210 @@ fun SettingsScreen() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * Records a cloned voice in the app: put a known sentence on screen, capture it at
+ * the layout cloning engines want (24 kHz mono PCM16), then keep the take.
+ *
+ * Because the user reads a prepared script, the transcript is known exactly — no
+ * typing, and no risk of a mismatch quietly wrecking the clone.
+ */
+@Composable
+private fun RecordVoiceDialog(
+    container: com.forge.audiobookforge.di.ContainerApi,
+    onSaved: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var phase by remember { mutableStateOf("script") }
+    var language by remember { mutableStateOf(com.forge.audiobookforge.tts.CloneScripts.languages.first()) }
+    var script by remember {
+        mutableStateOf(
+            com.forge.audiobookforge.tts.CloneScripts
+                .forLanguage(com.forge.audiobookforge.tts.CloneScripts.languages.first())
+                .first(),
+        )
+    }
+    var status by remember { mutableStateOf<String?>(null) }
+    var level by remember { mutableStateOf(0f) }
+    var seconds by remember { mutableStateOf(0.0) }
+    var quality by remember {
+        mutableStateOf<com.forge.audiobookforge.audio.VoiceRecorder.Quality?>(null)
+    }
+    var samples by remember { mutableStateOf<FloatArray?>(null) }
+    var name by remember { mutableStateOf("My voice") }
+    var transcript by remember { mutableStateOf("") }
+    val recorder = remember { com.forge.audiobookforge.audio.VoiceRecorder() }
+
+    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
+
+    // Poll the live level and elapsed time while capturing.
+    LaunchedEffect(phase) {
+        while (phase == "recording") {
+            level = recorder.currentLevel
+            seconds = recorder.elapsedSeconds
+            kotlinx.coroutines.delay(100)
+        }
+    }
+
+    fun begin() {
+        when (val r = recorder.start()) {
+            is com.forge.audiobookforge.audio.VoiceRecorder.Start.Ok -> {
+                phase = "recording"
+                status = null
+            }
+            is com.forge.audiobookforge.audio.VoiceRecorder.Start.Failed -> status = r.message
+        }
+    }
+
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) begin() else status = "Microphone permission is needed to record a voice."
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { recorder.cancel(); onDismiss() },
+        title = {
+            Text(
+                when (phase) {
+                    "recording" -> "Recording…"
+                    "review" -> "Save this voice"
+                    else -> "Record a cloned voice"
+                },
+            )
+        },
+        text = {
+            Column {
+                when (phase) {
+                    "script" -> {
+                        if (com.forge.audiobookforge.tts.CloneScripts.languages.size > 1) {
+                            Row {
+                                com.forge.audiobookforge.tts.CloneScripts.languages.forEach { lang ->
+                                    TextButton(onClick = {
+                                        language = lang
+                                        script = com.forge.audiobookforge.tts.CloneScripts
+                                            .forLanguage(lang).first()
+                                    }) { Text(if (language == lang) "• $lang" else lang) }
+                                }
+                            }
+                        }
+                        Text("Read this out loud:", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(6.dp))
+                        Text(script.text, style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "~${script.units} ${script.unitLabel} · about " +
+                                "${"%.0f".format(script.estimatedSeconds)} seconds · ${script.note}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(onClick = {
+                            val pool = com.forge.audiobookforge.tts.CloneScripts
+                                .forLanguage(script.language)
+                                .ifEmpty { com.forge.audiobookforge.tts.CloneScripts.ALL }
+                            script = pool[(pool.indexOf(script) + 1).mod(pool.size)]
+                        }) { Text("Give me another sentence") }
+                        Spacer(Modifier.height(6.dp))
+                        com.forge.audiobookforge.tts.CloneScripts.GUIDANCE.forEach {
+                            Text(
+                                "• $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    "recording" -> {
+                        Text(
+                            "${"%.1f".format(seconds)}s · aim for 5–15 · stops by itself at 30s",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { (level * 6f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            script.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    else -> {
+                        quality?.let { q ->
+                            Text(
+                                "Captured ${"%.1f".format(q.seconds)}s · average level " +
+                                    "${"%.1f".format(q.averageRms * 100)}% of full scale",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.material3.OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("Name this voice") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.material3.OutlinedTextField(
+                            value = transcript,
+                            onValueChange = { transcript = it },
+                            label = { Text("What you read (edit if you ad-libbed)") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                status?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            when (phase) {
+                "script" -> TextButton(onClick = {
+                    val granted = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (granted) begin() else permission.launch(android.Manifest.permission.RECORD_AUDIO)
+                }) { Text("Start recording") }
+
+                "recording" -> TextButton(onClick = {
+                    val captured = recorder.stop()
+                    val q = recorder.assess(captured ?: FloatArray(0))
+                    quality = q
+                    samples = captured
+                    if (q.usable) {
+                        // A known script means a known transcript — no typing needed.
+                        transcript = script.text
+                        phase = "review"
+                    } else {
+                        status = q.warning ?: "That take will not clone well — please try again."
+                        phase = "script"
+                    }
+                }) { Text("Stop") }
+
+                else -> TextButton(onClick = {
+                    val data = samples
+                    val chosen = name.ifBlank { "My voice" }
+                    val err = if (data == null) "Nothing to save."
+                    else container.clones.addRecorded(
+                        chosen, data, com.forge.audiobookforge.audio.VoiceRecorder.SAMPLE_RATE, transcript,
+                    )
+                    if (err == null) onSaved(chosen) else status = err
+                }) { Text("Save voice") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { recorder.cancel(); onDismiss() }) { Text("Cancel") }
+        },
+    )
 }

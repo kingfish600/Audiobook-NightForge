@@ -1,6 +1,7 @@
 package com.forge.audiobookforge.tts
 
 import com.forge.audiobookforge.audio.RefAudio
+import com.forge.audiobookforge.audio.Wav
 import java.io.File
 
 /**
@@ -56,6 +57,25 @@ class CloneStore(private val root: File) {
         wavFor(safe).writeBytes(wavBytes)
         txtFor(safe).writeText(clean)
         return null
+    }
+
+    /**
+     * Saves a clip recorded in the app (24 kHz mono float samples). Written through
+     * the same WAV writer the rest of the app uses, then validated by [add], so a
+     * recorded clone and an imported one go through identical checks.
+     */
+    fun addRecorded(name: String, samples: FloatArray, rate: Int, text: String): String? {
+        if (samples.isEmpty()) return "Nothing was recorded."
+        root.mkdirs()
+        val tmp = File(root, "recording.tmp.wav")
+        return try {
+            Wav.write(tmp, samples, rate)
+            add(name, tmp.readBytes(), text)
+        } catch (e: Exception) {
+            "Could not save the recording."
+        } finally {
+            tmp.delete()
+        }
     }
 
     fun delete(name: String) {
