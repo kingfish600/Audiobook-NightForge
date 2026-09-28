@@ -259,6 +259,13 @@ class ConversionWorker(
         } else {
             AacChapterWriter(outFile, sampleRate = sampleRate)
         }
+        // Length-weighted progress for the whole book. Computed once per chapter: the set
+        // of finished chapters cannot change while this one renders.
+        val charsTotalOverall = book.chapters.sumOf { it.charCount }.coerceAtLeast(1)
+        val charsDoneOverall = book.chapters
+            .filter { it.status == ChapterStatus.DONE }
+            .sumOf { it.charCount }
+
         // A sid left over from a previously installed multi-voice engine is clamped
         // here, matching the preview path (the native code clamps too, but it logs a
         // warning for every single chunk when handed an out-of-range sid).
@@ -319,6 +326,8 @@ class ConversionWorker(
                         chaptersTotal = book.chapters.size,
                         charsDoneInChapter = charsDone,
                         charsTotalInChapter = charsTotal,
+                        charsDoneOverall = charsDoneOverall,
+                        charsTotalOverall = charsTotalOverall,
                         lastChunkRtf = avgRtf,
                     )
                 )
@@ -326,7 +335,9 @@ class ConversionWorker(
                     val etaMin = estimateEtaMinutes(chunks, charsDone, startedAt, book.chapters.size - ch.index)
                     postProgress(
                         applicationContext, book.title,
-                        fraction = charsDone.toFloat() / charsTotal,
+                        // The whole book's fraction, not this chapter's: a per-chapter bar
+                        // filled up and then restarted at every chapter boundary.
+                        fraction = (charsDoneOverall + charsDone).toFloat() / charsTotalOverall,
                         text = "${ch.title} · ${n + 1}/${chunks.size} segments · ETA ~${etaMin}m",
                     )
                 }

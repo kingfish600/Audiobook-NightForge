@@ -16,11 +16,19 @@ sealed interface ConversionState {
         val chaptersTotal: Int,
         val charsDoneInChapter: Int = 0,
         val charsTotalInChapter: Int = 1,
+        /**
+         * Characters finished in earlier chapters. Progress is weighted by TEXT LENGTH, not
+         * by chapter count: a chapter can be a few hundred characters (a table of contents)
+         * or tens of thousands. Counting chapters made short leading chapters advance the
+         * bar as far as a full one, so a book looked nearly finished long before it was.
+         */
+        val charsDoneOverall: Int = 0,
+        val charsTotalOverall: Int = 1,
         val lastChunkRtf: Float = 0f,
     ) : ConversionState {
         val overallFraction: Float
-            get() = (chaptersDone + charsDoneInChapter.toFloat() / charsTotalInChapter.coerceAtLeast(1)) /
-                chaptersTotal.coerceAtLeast(1)
+            get() = (charsDoneOverall + charsDoneInChapter).toFloat() /
+                charsTotalOverall.coerceAtLeast(1)
     }
 
     /** Conversion stopped because something failed; message is shown inline in the UI. */
