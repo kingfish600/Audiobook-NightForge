@@ -147,9 +147,22 @@ class ConversionWorker(
                     useOpus = useOpus,
                     outExt = outExt,
                 )
+                val doneFile = File(repo.audioDir(bookId), "%03d.$outExt".format(ch.index))
+                // Read the file back before calling it finished. Marking DONE on a file
+                // the platform cannot parse hides the failure until an export chokes on
+                // it much later, with the user unable to tell which chapter is at fault.
+                if (!isReadableMedia(doneFile)) {
+                    ch.status = ChapterStatus.FAILED
+                    ch.audioFile = null
+                    repo.save(book)
+                    doneFile.delete()
+                    throw IllegalStateException(
+                        "The render produced an unreadable audio file for '${ch.title}'. " +
+                            "Rendering it again usually fixes it."
+                    )
+                }
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
-                val doneFile = File(repo.audioDir(bookId), "%03d.$outExt".format(ch.index))
                 log(
                     "chapter ${ch.index} DONE: '${ch.title}' duration=${ch.durationMs}ms " +
                         "file=${doneFile.name} bytes=${doneFile.length()}"
@@ -323,6 +336,21 @@ class ConversionWorker(
             ch.audioFile = outFile.name
         }
     }
+
+    /**
+     * Cheap read-back check. A finished chapter must be openable by the platform's
+     * own extractor; anything else is a broken file wearing a .m4a/.ogg/.wav name.
+     */
+    private fun isReadableMedia(f: java.io.File): Boolean = runCatching {
+        if (!f.isFile || f.length() < 512) return false
+        val ex = android.media.MediaExtractor()
+        try {
+            ex.setDataSource(f.absolutePath)
+            ex.trackCount > 0
+        } finally {
+            ex.release()
+        }
+    }.getOrDefault(false)
 
     private fun estimateEtaMinutes(
         chunks: List<String>,

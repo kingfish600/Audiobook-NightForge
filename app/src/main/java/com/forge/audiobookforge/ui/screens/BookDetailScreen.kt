@@ -370,14 +370,23 @@ fun BookDetailScreen(bookId: String?) {
                                                         }
                                                     }
                                                     pendingM4b = res.file
-                                                    val suffix = if (res.chapters < book.chapters.size)
-                                                        ".Part${res.chapters}of${book.chapters.size}.m4b" else ".m4b"
+                                                    val suffix = when {
+                                                        // No chapter marks at all: say so in the
+                                                        // name rather than "Part0of…".
+                                                        res.chapters == 0 -> ".nochapters.m4b"
+                                                        res.chapters < book.chapters.size ->
+                                                            ".Part${res.chapters}of${book.chapters.size}.m4b"
+                                                        else -> ".m4b"
+                                                    }
                                                     m4bLauncher.launch("${book.title}$suffix")
                                                     snackbar.showSnackbar(
-                                                        (if (res.chapters < book.chapters.size)
+                                                        (if (res.chapters == 0)
+                                                            "Bundled without chapter marks"
+                                                        else if (res.chapters < book.chapters.size)
                                                             "Partial bundle: ${res.chapters}/${book.chapters.size}"
-                                                        else "Full book bundled: ${res.chapters} chapters") +
-                                                        " · " + res.anatomy
+                                                        else
+                                                            "Full book bundled: ${res.chapters} chapters") +
+                                                        " · " + res.anatomy,
                                                     )
                                                 } catch (t: Throwable) {
                                                     snackbar.showSnackbar(t.message ?: t.javaClass.simpleName)

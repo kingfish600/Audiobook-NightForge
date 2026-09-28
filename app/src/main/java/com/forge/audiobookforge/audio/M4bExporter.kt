@@ -36,6 +36,8 @@ object M4bExporter {
         val neroChpl: Boolean = false,
         val appleWired: Boolean = false,
         val appleRefusedByDevice: Boolean = false,
+        /** Titles of chapters whose audio could not be read; they are not in the bundle. */
+        val skippedChapters: List<String> = emptyList(),
     ) { val anatomy: String get() =
         "chapters embedded — Nero:" + (if (neroChpl) "yes" else "no") +
         " · Apple:" + when {
@@ -55,6 +57,7 @@ object M4bExporter {
         var neroOk = false
         var appleOk = false
         var appleRefused = false
+        val skipped = ArrayList<String>()
         val done = book.chapters.filter {
             it.status == com.forge.audiobookforge.data.model.ChapterStatus.DONE && it.audioFile != null
         }.sortedBy { it.index }
@@ -90,8 +93,15 @@ object M4bExporter {
             for (ch in done) {
                 val src = File(audioDir, ch.audioFile!!)
                 val ex = MediaExtractor()
+                // A chapter file the platform cannot parse must not destroy the whole
+                // bundle. One damaged file used to surface as an opaque framework
+                // error ("no moov candidate terminates at EOF") with nothing exported.
+                if (runCatching { ex.setDataSource(src.absolutePath) }.isFailure) {
+                    ex.release()
+                    skipped += ch.title
+                    continue
+                }
                 try {
-                    ex.setDataSource(src.absolutePath)
                     var audioIdx = -1
                     var fmt: MediaFormat? = null
                     for (i in 0 until ex.trackCount) {
@@ -156,11 +166,25 @@ object M4bExporter {
         }
 
         val totalMs = baseUs / 1_000
-        ChapterBox.writeChapters(tmp, entries, totalMs)
-        neroOk = ChapterBox.verifyChpl(tmp, entries.size)
+        // The Nero chpl box can only be injected when moov is the FINAL atom, because
+        // growing an earlier moov would shift every chunk offset in the file. Some
+        // devices emit a streaming layout (ftyp + moov + mdat) instead, which used to
+        // fail the entire export with "no moov candidate terminates at EOF". Degrade
+        // instead: the audio still ships, and the anatomy line says Nero chapters are
+        // absent rather than pretending they are there.
+        val neroAttempt = runCatching {
+            ChapterBox.writeChapters(tmp, entries, totalMs)
+            ChapterBox.verifyChpl(tmp, entries.size)
+        }
+        neroOk = neroAttempt.getOrDefault(false)
+        if (neroAttempt.isFailure) {
+            android.util.Log.w(
+                "NightForge",
+                "m4b: Nero chapters skipped — ${neroAttempt.exceptionOrNull()?.message}",
+            )
+        }
         if (textTrack >= 0) {
-            ChapterBox.injectChapReference(tmp)
-            appleOk = true
+            appleOk = runCatching { ChapterBox.injectChapReference(tmp); true }.getOrDefault(false)
         }
         // No hand-built fallback: constructing binary boxes that must satisfy
         // every parser proved worse than honest absence. Refusing ROMs ship
@@ -172,8 +196,24 @@ object M4bExporter {
         // Report what the file actually carries: the Nero chpl box holds at most
         // 255 chapters, so when the Apple chapter track was refused this is the
         // only chapter source and the count must not overstate it.
-        val reportedChapters = if (appleOk) entries.size else entries.size.coerceAtMost(255)
-        return Result(out, reportedChapters, totalMs, neroOk, appleOk, appleRefused)
+        // Report what the file ACTUALLY carries. If neither system landed (the device
+        // refused the timed-text track and the Nero box could not be injected into a
+        // streaming moov layout) then the file has no chapters at all, and claiming
+        // otherwise is the same class of lie as an export that wrote nothing.
+        val reportedChapters = when {
+            appleOk -> entries.size
+            neroOk -> entries.size.coerceAtMost(255)
+            else -> 0
+        }
+        return Result(
+            file = out,
+            chapters = reportedChapters,
+            durationMs = totalMs,
+            neroChpl = neroOk,
+            appleWired = appleOk,
+            appleRefusedByDevice = appleRefused,
+            skippedChapters = skipped,
+        )
     }
 }
 
@@ -424,12 +464,26 @@ internal object ChapterBox {
                     val lb = ByteArray(8).also { raf.readFully(it) }
                     var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
                     if (ls == len - bs && ls <= Int.MAX_VALUE) return bs to ls.toInt()
+                } else if (s32 == 0) {
+                    // ISO-BMFF: size 0 means "this box runs to the end of the file".
+                    // MediaMuxer emits this for the final box on some devices, and we
+                    // used to reject the file outright with "no moov ... terminates at EOF".
+                    return bs to (len - bs).toInt()
                 } else if (s32 > 8 && bs + s32 == len) {
                     return bs to s32
                 }
             }
         }
-        error("no moov candidate terminates at EOF | len=$len | candidates=${candidates.size}")
+        val detail = candidates.toList().asReversed().take(3).joinToString("; ") { bs ->
+            val hdr = runCatching {
+                java.io.RandomAccessFile(f, "r").use { r ->
+                    r.seek(bs); ByteArray(8).also { r.readFully(it) }
+                }
+            }.getOrNull()
+            val size = hdr?.let { readU32(it, 0) }
+            "at $bs size=$size gap=${len - bs}"
+        }
+        error("no moov candidate terminates at EOF | len=$len | candidates=${candidates.size} | $detail")
     }
 
     private fun readAt(f: File, off: Long, len: Int): ByteArray =
