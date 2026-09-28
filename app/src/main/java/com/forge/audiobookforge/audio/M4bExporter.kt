@@ -227,6 +227,13 @@ internal object ChapterBox {
 
     private data class Child(val type: String, val bytes: ByteArray)
 
+    /**
+     * A `moov` contains these; random media bytes that merely spell "moov" do not
+     * begin with one of the four-letter atom names a movie box holds. Used to stop a
+     * size-0 false positive inside `mdat` being treated as an editable box.
+     */
+    private val MOOV_CHILDREN = setOf("mvhd", "iods", "trak", "mvex", "udta", "free")
+
     fun writeChapters(f: File, chapters: List<M4bExporter.Entry>, totalMs: Long) {
         // Top-level walk to locate moov (must be last box). Uses RandomAccessFile
         // because InputStream.skip() may legally skip FEWER bytes than requested,
@@ -427,7 +434,7 @@ internal object ChapterBox {
      * requiring boxStart + declaredSize == fileSize. Immune to any corruption
      * in earlier boxes (observed on RedMagic: mdat largesize left unfinalized).
      */
-    private fun locateMoovRobust(f: File): Pair<Long, Int> {
+    internal fun locateMoovRobust(f: File): Pair<Long, Int> {
         val len = f.length()
         check(len in 17..Int.MAX_VALUE) { "bad size for edit: $len" }
         val candidates = LinkedHashSet<Long>()
@@ -460,18 +467,29 @@ internal object ChapterBox {
                 raf.seek(bs)
                 val hdr = ByteArray(8).also { raf.readFully(it) }
                 val s32 = readU32(hdr, 0)
-                if (s32 == 1) {
-                    val lb = ByteArray(8).also { raf.readFully(it) }
-                    var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
-                    if (ls == len - bs && ls <= Int.MAX_VALUE) return bs to ls.toInt()
-                } else if (s32 == 0) {
+                val size = when {
+                    s32 == 1 -> {
+                        val lb = ByteArray(8).also { raf.readFully(it) }
+                        var ls = 0L; for (b in lb) ls = (ls shl 8) or (b.toLong() and 0xFF)
+                        if (ls == len - bs && ls <= Int.MAX_VALUE) ls.toInt() else -1
+                    }
                     // ISO-BMFF: size 0 means "this box runs to the end of the file".
                     // MediaMuxer emits this for the final box on some devices, and we
                     // used to reject the file outright with "no moov ... terminates at EOF".
-                    return bs to (len - bs).toInt()
-                } else if (s32 > 8 && bs + s32 == len) {
-                    return bs to s32
+                    s32 == 0 -> (len - bs).toInt()
+                    s32 > 8 && bs + s32 == len -> s32
+                    else -> -1
                 }
+                if (size <= 0) return@use
+                // The size arithmetic alone is not proof: the four bytes "moov" can occur
+                // inside media data, and with a zero size field that looks exactly like a
+                // box running to EOF. Editing such a candidate would corrupt the file, so
+                // require the child atom a real movie header must begin with.
+                // A box payload starts with the first child's SIZE (4 bytes), then its
+                // type - so the child's type sits at +12, not +8. (Reading +8 would
+                // have rejected every genuine file.)
+                val child = ByteArray(4).also { raf.seek(bs + 12); raf.readFully(it) }
+                if (String(child, Charsets.US_ASCII) in MOOV_CHILDREN) return bs to size
             }
         }
         val detail = candidates.toList().asReversed().take(3).joinToString("; ") { bs ->
