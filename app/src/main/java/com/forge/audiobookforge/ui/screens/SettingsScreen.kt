@@ -153,6 +153,10 @@ fun SettingsScreen() {
                 Spacer(Modifier.height(8.dp))
 
                 var cloneList by remember { mutableStateOf(container.clones.list()) }
+                // Which clone is currently synthesising. Feedback belongs in that clone's own
+                // row: the card is tall and a status line at its bottom lands off-screen, so a
+                // slow preview looked like nothing was happening at all.
+                var busyClone by remember { mutableStateOf<String?>(null) }
                 var cloneStatus by remember { mutableStateOf<String?>(null) }
                 var pendingWav by remember { mutableStateOf<ByteArray?>(null) }
                 var pendingName by remember { mutableStateOf("") }
@@ -217,18 +221,37 @@ fun SettingsScreen() {
                         }) { Text("Remove") }
                     }
                     Row(Modifier.padding(start = 4.dp, bottom = 6.dp)) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                cloneStatus = "Speaking as ${c.name}…"
-                                cloneStatus = container.previewClone(c.name)
-                                    ?: "That is how ${c.name} sounds."
-                            }
-                        }) { Text("Hear the clone") }
+                        TextButton(
+                            enabled = busyClone == null,
+                            onClick = {
+                                scope.launch {
+                                    busyClone = c.name
+                                    cloneStatus = null
+                                    runCatching { container.previewClone(c.name) }
+                                        .onSuccess {
+                                            cloneStatus = it ?: "That is how ${c.name} sounds."
+                                        }
+                                        .onFailure { cloneStatus = "Preview failed: ${it.message}" }
+                                    busyClone = null
+                                }
+                            },
+                        ) { Text("Hear the clone") }
                         TextButton(onClick = {
                             // Play the reference itself, to compare before trusting the clone.
                             container.player.playPreview(c.wav)
                             cloneStatus = "Playing the clip ${c.name} was cloned from."
                         }) { Text("Hear the original") }
+                    }
+                    if (busyClone == c.name) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        )
+                        Text(
+                            "Synthesising ${c.name}… cloning voices take longer than Kokoro or " +
+                                "Kitten, and the first preview also loads the model.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
 
@@ -309,6 +332,9 @@ fun SettingsScreen() {
                 }
 
                 var transcribeStatus by remember { mutableStateOf<String?>(null) }
+                // Which clone is currently synthesising. Shown in that clone's own row: the
+                // card is tall, and a status line at its bottom lands off-screen, so a slow
+                // preview looked like nothing was happening at all.
 
                 if (askTranscript) {
                     androidx.compose.material3.AlertDialog(

@@ -221,6 +221,21 @@ fun BookDetailScreen(bookId: String?) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                         Text(if (previewBusy) "  Generating preview…" else "  Preview this voice & speed")
                     }
+                    if (previewBusy) {
+                        // A static label was the only sign of life, and a cloning preview can take
+                        // tens of seconds — it read as a hang. Show something that moves, and say
+                        // why it is slow.
+                        Spacer(Modifier.height(6.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            "Synthesising a sample. Cloning voices (ZipVoice) take much longer than " +
+                                "Kokoro or Kitten, and the first one also loads the model.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
 
                     Spacer(Modifier.height(6.dp))
                     var speed by remember(book.id) { mutableFloatStateOf(book.speed) }
