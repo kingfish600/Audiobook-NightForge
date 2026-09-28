@@ -561,9 +561,19 @@ fun SettingsScreen() {
                         container.settings.setExportTreeUri(uri.toString())
                     }
                 }
+                if (exportTree != null) {
+                    // Until now a custom folder could only be replaced by another custom folder:
+                    // there was no way back to the default short of clearing app data (which
+                    // would take the library and every cloned voice with it).
+                    TextButton(onClick = { container.settings.setExportTreeUri(null) }) {
+                        Text("Use the default location instead")
+                    }
+                }
                 Text(
                     exportTree?.let { "Custom folder selected (chapters land in a sub-folder per book)." }
-                        ?: "Default: Music/AudiobookForge in the shared music library.",
+                        // The folder has been called "Audiobook NightForge" for a long time; this
+                        // label still named the old one, so it described a path that never exists.
+                        ?: "Default: Music/Audiobook NightForge in the shared music library.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
