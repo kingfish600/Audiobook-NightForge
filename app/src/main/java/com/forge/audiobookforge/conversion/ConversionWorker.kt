@@ -202,6 +202,15 @@ class ConversionWorker(
         } else {
             AacChapterWriter(outFile, sampleRate = sampleRate)
         }
+        // A sid left over from a previously installed multi-voice engine is clamped
+        // here, matching the preview path (the native code clamps too, but it logs a
+        // warning for every single chunk when handed an out-of-range sid).
+        val speakerCount = engine.numSpeakers()
+        val sid = if (speakerCount > 0) book.voiceSid.coerceIn(0, speakerCount - 1) else 0
+        // Chunks that come back almost empty mean the voice cannot pronounce this
+        // text (unsupported language, or a model that did not load properly). Without
+        // this guard the book renders "successfully" as minutes of near-silence.
+        var degenerateChunks = 0
         try {
             for ((n, chunk) in chunks.withIndex()) {
                 // Prompt response to a WorkManager/scope cancellation, and to a
@@ -211,7 +220,7 @@ class ConversionWorker(
                     throw kotlinx.coroutines.CancellationException("stopped")
                 }
                 val t0 = System.nanoTime()
-                val audio = checkNotNull(engine.synthesize(chunk, book.voiceSid, book.speed)) { "Engine not loaded" }
+                val audio = checkNotNull(engine.synthesize(chunk, sid, book.speed)) { "Engine not loaded" }
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)
                 } else audio.samples
@@ -222,6 +231,7 @@ class ConversionWorker(
 
                 val synthSec = (System.nanoTime() - t0) / 1e9
                 val audioSec = audio.samples.size.toDouble() / audio.sampleRate
+                if (chunk.length >= 80 && audioSec < chunk.length * 0.020) degenerateChunks++
                 val rtf = if (audioSec > 0) (synthSec / audioSec).toFloat() else 0f
                 charsDone += chunk.length
                 rtfWindow.addLast(rtf)
@@ -255,6 +265,14 @@ class ConversionWorker(
                         text = "${ch.title} · ${n + 1}/${chunks.size} segments · ETA ~${etaMin}m",
                     )
                 }
+            }
+            if (degenerateChunks >= 2 && degenerateChunks * 2 >= chunks.size) {
+                throw IllegalStateException(
+                    "The voice produced almost no audio for this chapter " +
+                        "($degenerateChunks of ${chunks.size} segments). The installed voice " +
+                        "probably cannot pronounce this language, or its model file is damaged — " +
+                        "try a different voice in Settings.",
+                )
             }
         } catch (t: Throwable) {
             // User stop OR system stop (constraint lost, app swiped away):

@@ -125,21 +125,25 @@ fun BookDetailScreen(bookId: String?) {
                     // silently clamped it. Unknown/not-loaded defaults to the Kokoro roster.
                     val engineKind = container.kokoroEngine.kind
                     val engineLoaded = container.kokoroEngine.isLoaded
-                    val speakerCount = if (engineLoaded) container.kokoroEngine.numSpeakers() else 0
-                    // The engine only loads on the first synthesis, so right after a model
-                    // change we must read the ACTIVE MODEL to know what is installed —
-                    // otherwise Piper (one voice) showed Kokoro's 54-voice roster.
-                    val activeKind = container.models.ui.value.modelDir
-                        ?.let { ModelManager.bundleKind(it) }
-                    val effectiveKind = if (engineLoaded) engineKind else activeKind
+                    val activeModelDir = container.models.ui.value.modelDir
+                    // Trust the loaded engine only while it IS the active model. After a
+                    // model switch the previous engine lingers until the next synthesis,
+                    // and trusting it advertised the wrong voices both ways: Kokoro's
+                    // roster with Piper installed, or "built-in" with Kokoro installed.
+                    val loadedIsActive = engineLoaded &&
+                        container.kokoroEngine.loadedDir != null &&
+                        container.kokoroEngine.loadedDir == activeModelDir
+                    val effectiveKind = if (loadedIsActive) engineKind
+                        else activeModelDir?.let { ModelManager.bundleKind(it) }
+                    val speakerCount = if (loadedIsActive) container.kokoroEngine.numSpeakers() else 0
                     val isKokoro = effectiveKind == null || effectiveKind == ModelManager.EngineKind.KOKORO
                     val voiceOptions: List<Voices.Voice> = when {
                         isKokoro -> Voices.ALL
-                        engineLoaded && speakerCount > 1 ->
+                        loadedIsActive && speakerCount > 1 ->
                             (0 until speakerCount).map { Voices.Voice(it, "Speaker ${it + 1}", "") }
                         else -> emptyList()
                     }
-                    val singleVoice = if (engineLoaded) speakerCount <= 1 else !isKokoro
+                    val singleVoice = if (loadedIsActive) speakerCount <= 1 else !isKokoro
                     var voiceMenu by remember { mutableStateOf(false) }
                     OutlinedButton(enabled = !singleVoice && voiceOptions.isNotEmpty(), onClick = { voiceMenu = true }) {
                         Text(
