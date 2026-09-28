@@ -126,15 +126,20 @@ fun BookDetailScreen(bookId: String?) {
                     val engineKind = container.kokoroEngine.kind
                     val engineLoaded = container.kokoroEngine.isLoaded
                     val speakerCount = if (engineLoaded) container.kokoroEngine.numSpeakers() else 0
-                    val isKokoro = engineKind == null || engineKind == ModelManager.EngineKind.KOKORO
+                    // The engine only loads on the first synthesis, so right after a model
+                    // change we must read the ACTIVE MODEL to know what is installed —
+                    // otherwise Piper (one voice) showed Kokoro's 54-voice roster.
+                    val activeKind = container.models.ui.value.modelDir
+                        ?.let { ModelManager.bundleKind(it) }
+                    val effectiveKind = if (engineLoaded) engineKind else activeKind
+                    val isKokoro = effectiveKind == null || effectiveKind == ModelManager.EngineKind.KOKORO
                     val voiceOptions: List<Voices.Voice> = when {
-                        !engineLoaded && isKokoro -> Voices.ALL
-                        isKokoro && speakerCount > 1 -> Voices.ALL
-                        !isKokoro && speakerCount > 1 ->
+                        isKokoro -> Voices.ALL
+                        engineLoaded && speakerCount > 1 ->
                             (0 until speakerCount).map { Voices.Voice(it, "Speaker ${it + 1}", "") }
                         else -> emptyList()
                     }
-                    val singleVoice = engineLoaded && speakerCount <= 1
+                    val singleVoice = if (engineLoaded) speakerCount <= 1 else !isKokoro
                     var voiceMenu by remember { mutableStateOf(false) }
                     OutlinedButton(enabled = !singleVoice && voiceOptions.isNotEmpty(), onClick = { voiceMenu = true }) {
                         Text(
