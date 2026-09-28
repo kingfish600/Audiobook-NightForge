@@ -24,6 +24,8 @@ class AppContainer(private val context: Context) : ContainerApi {
 
     override fun transcriberReady(): Boolean = transcriber.isReady()
 
+    override fun removeTranscriber() = transcriber.remove()
+
     override suspend fun installTranscriber() = withContext(Dispatchers.IO) { transcriber.install() }
 
     override suspend fun transcribeClip(bytes: ByteArray): String? = withContext(Dispatchers.IO) {
@@ -101,7 +103,11 @@ class AppContainer(private val context: Context) : ContainerApi {
             return@withContext "Add a voice clone first (Settings → Cloned voices), then preview."
         }
         val audio = kokoroEngine.synthesize(
-            PREVIEW_TEXT, sid, book.speed, reference, settings.cloneSteps.value,
+            text = PREVIEW_TEXT,
+            sid = sid,
+            speed = book.speed,
+            reference = reference,
+            steps = settings.cloneSteps.value,
         )
             ?: return@withContext "Synthesis failed — engine not loaded."
         if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
@@ -118,9 +124,11 @@ class AppContainer(private val context: Context) : ContainerApi {
         kokoroEngine.load(modelDir, settings.numThreads.value)?.let { return@withContext it }
         val clone = clones.get(name) ?: return@withContext "That voice is no longer in the library."
         val audio = kokoroEngine.synthesize(
-            PREVIEW_TEXT, 0, 1f,
-            com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice(clone.wav, clone.text),
-            settings.cloneSteps.value,
+            text = PREVIEW_TEXT,
+            sid = 0,
+            speed = 1f,
+            reference = com.forge.audiobookforge.tts.KokoroEngine.ReferenceVoice(clone.wav, clone.text),
+            steps = settings.cloneSteps.value,
         ) ?: return@withContext "Synthesis failed — is a cloning engine (ZipVoice) installed?"
         if (audio.samples.isEmpty()) return@withContext "Synthesis produced no audio."
         val f = File(context.cacheDir, "clone_preview.wav")

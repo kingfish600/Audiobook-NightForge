@@ -134,10 +134,18 @@ class ConversionWorker(
                 if (ch.status == ChapterStatus.DONE && existing != null && existing.isFile) continue
 
                 renderChapter(
-                    engine, repo, controller, runId, book, ch,
-                    container.cloneFor(book),
-                    sampleRate, settings.segmentChars.value, settings.cloneSteps.value,
-                    useOpus, outExt,
+                    engine = engine,
+                    repo = repo,
+                    controller = controller,
+                    runId = runId,
+                    book = book,
+                    ch = ch,
+                    reference = container.cloneFor(book),
+                    cloneSteps = settings.cloneSteps.value,
+                    sampleRate = sampleRate,
+                    segmentLen = settings.segmentChars.value,
+                    useOpus = useOpus,
+                    outExt = outExt,
                 )
                 ch.status = ChapterStatus.DONE
                 repo.save(book)
@@ -228,7 +236,13 @@ class ConversionWorker(
                 }
                 val t0 = System.nanoTime()
                 val audio = checkNotNull(
-                    engine.synthesize(chunk, sid, book.speed, reference, cloneSteps),
+                    engine.synthesize(
+                        text = chunk,
+                        sid = sid,
+                        speed = book.speed,
+                        reference = reference,
+                        steps = cloneSteps,
+                    ),
                 ) { "Engine not loaded" }
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)

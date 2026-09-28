@@ -34,6 +34,9 @@ interface ContainerApi {
 
     /** Writes the words spoken in [bytes] (a WAV). Null when it cannot be read. */
     suspend fun transcribeClip(bytes: ByteArray): String?
+
+    /** Deletes the downloaded recogniser (it is ~111 MB). */
+    fun removeTranscriber()
 }
 
 val LocalAppContainer = staticCompositionLocalOf<ContainerApi> {

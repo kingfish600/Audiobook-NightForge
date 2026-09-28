@@ -269,6 +269,28 @@ fun SettingsScreen() {
                     Spacer(Modifier.height(4.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Transcriber", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (container.transcriberReady()) {
+                                "Installed · writes the transcript of an imported clip automatically."
+                            } else {
+                                "Not installed · downloads itself (≈111 MB) the first time it is needed."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (container.transcriberReady()) {
+                        val sizeMb = 111
+                        TextButton(onClick = {
+                            container.removeTranscriber()
+                            cloneStatus = "Removed the transcriber (≈$sizeMb MB) — it downloads again if needed."
+                        }) { Text("Remove") }
+                    }
+                }
 
                 if (showRecorder) {
                     RecordVoiceDialog(
