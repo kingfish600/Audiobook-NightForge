@@ -117,6 +117,7 @@ class ConversionWorker(
         if (screenLock != null) log("screen-awake lock held (performance clocks should persist)")
 
         var failed = false
+        val unreadable = ArrayList<String>()
         try {
             val codec = settings.codec.value
             val useOpus = codec == "opus"
@@ -152,14 +153,21 @@ class ConversionWorker(
                 // the platform cannot parse hides the failure until an export chokes on
                 // it much later, with the user unable to tell which chapter is at fault.
                 if (!isReadableMedia(doneFile)) {
+                    // Mark it and carry on. Throwing here aborted the entire book, so one
+                    // bad chapter at #3 of 40 abandoned the remaining 37 (and, because
+                    // endRun() used to wipe the failure, said nothing about why).
                     ch.status = ChapterStatus.FAILED
                     ch.audioFile = null
                     repo.save(book)
                     doneFile.delete()
-                    throw IllegalStateException(
-                        "The render produced an unreadable audio file for '${ch.title}'. " +
-                            "Rendering it again usually fixes it."
+                    unreadable += ch.title
+                    log("chapter ${ch.index} FAILED: unreadable output after render ('${ch.title}')")
+                    postProgress(
+                        applicationContext, book.title,
+                        (ch.index + 1).toFloat() / book.chapters.size.coerceAtLeast(1),
+                        "Chapter '${ch.title}' produced an unreadable file — continuing",
                     )
+                    continue
                 }
                 ch.status = ChapterStatus.DONE
                 repo.save(book)

@@ -59,6 +59,8 @@ class ConversionController {
 
     /** Called at the start of every worker run; returns the id of this run. */
     fun beginRun(): Long {
+        // A new run clears the previous failure (endRun deliberately leaves it visible).
+        if (_state.value is ConversionState.Failed) _state.value = ConversionState.Idle
         suppressUpdates = false
         runSeq += 1
         return runSeq
@@ -72,7 +74,11 @@ class ConversionController {
     fun endRun(runId: Long) {
         if (runId != runSeq) return
         suppressUpdates = false
-        if (_state.value !is ConversionState.Idle) {
+        // Never erase a failure. fail() runs in the worker's catch and endRun() runs
+        // microseconds later in its finally, so every "why did it fail" message was
+        // being wiped before the user could read it. The next run clears it instead.
+        val current = _state.value
+        if (current !is ConversionState.Idle && current !is ConversionState.Failed) {
             _state.value = ConversionState.Idle
         }
     }

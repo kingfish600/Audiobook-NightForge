@@ -193,6 +193,20 @@ class ModelManager(private val context: Context) {
             // Transactional swap. The old code deleted the working model BEFORE
             // validating the new one, so an unusable archive left the user with
             // nothing while the message claimed the previous model was untouched.
+            // The vocoder is fetched into the STAGED bundle, before the installed model is
+            // touched at all. Doing it after the swap meant a 54 MB failure stranded the
+            // working engine in ".backup" while the user was told it was "untouched".
+            if (option.kind == EngineKind.ZIPVOICE) {
+                update { it.copy(indeterminate = true, phaseLabel = "Fetching vocoder (54 MB)…") }
+                val vocoder = File(inner, "vocoder.onnx")
+                downloadFile(
+                    "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx",
+                    vocoder,
+                )
+                check(vocoder.length() > 10_000_000) { "Vocoder download failed — nothing was replaced." }
+                update { it.copy(indeterminate = false) }
+            }
+
             val backup = File(modelsRoot, option.id + ".backup").apply { deleteRecursively() }
             val hadOld = target.isDirectory && target.renameTo(backup)
             if (!inner.renameTo(target)) {
@@ -200,21 +214,6 @@ class ModelManager(private val context: Context) {
                 inner.deleteRecursively()
             }
             stage.deleteRecursively()
-
-            // ZipVoice bundles ship without their vocoder — the model references a
-            // separate vocos model. Fetch it into the bundle so the engine finds it.
-            if (option.kind == EngineKind.ZIPVOICE) {
-                update { it.copy(indeterminate = true, phaseLabel = "Fetching vocoder (54 MB)…") }
-                val vocoder = File(target, "vocoder.onnx")
-                downloadFile(
-                    "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx",
-                    vocoder,
-                )
-                check(vocoder.length() > 10_000_000) {
-                    "Vocoder download failed — your previous model is untouched."
-                }
-                update { it.copy(indeterminate = false) }
-            }
 
             val newOk = bundleComplete(target)
             if (!newOk) {
@@ -231,6 +230,10 @@ class ModelManager(private val context: Context) {
             // one makes it the active choice (previously the others were deleted,
             // and that deletion is what made the new engine active by default).
             prefs().edit().putString("active_model_path", target.absolutePath).apply()
+            // Publish first: a listener that inspects models.ui was otherwise handed the
+            // PRE-download state, so AppContainer never saw the new engine and the
+            // bundled reference clips were not imported on a first ZipVoice install.
+            _ui.value = detect()
             onModelChanged?.invoke()
 
             val detected = detect()
@@ -243,6 +246,9 @@ class ModelManager(private val context: Context) {
             inFlight.set(false)
         } catch (t: Throwable) {
             inFlight.set(false)
+            // Whatever failed, a working engine must not be left sitting in ".backup"
+            // (invisible to detect(), and destroyed by "remove all engines").
+            restoreStrandedBackups()
             update {
                 it.copy(
                     downloading = false,
@@ -255,6 +261,25 @@ class ModelManager(private val context: Context) {
     }
 
     /** Catalog ids whose bundles are actually on disk right now. */
+    /**
+     * Puts back any engine left in a ".backup" directory whose live bundle is missing or
+     * incomplete, and clears backups that are no longer needed. Called after a failed
+     * install so an interrupted swap can never cost the user a working engine.
+     */
+    private fun restoreStrandedBackups() {
+        runCatching {
+            modelsRoot.listFiles { f -> f.isDirectory && f.name.endsWith(".backup") }?.forEach { b ->
+                val original = File(modelsRoot, b.name.removeSuffix(".backup"))
+                if (!bundleComplete(original)) {
+                    original.deleteRecursively()
+                    b.renameTo(original)
+                } else {
+                    b.deleteRecursively()
+                }
+            }
+        }
+    }
+
     fun installedOptionIds(): Set<String> =
         CATALOG.filter { isValidBundle(dirFor(it)) }.map { it.id }.toSet()
 
@@ -312,9 +337,19 @@ class ModelManager(private val context: Context) {
             extractTarBz2(archive, unpacked) { }
             // Bundles carry a single top-level directory; hoist it.
             val inner = unpacked.listFiles { f -> f.isDirectory }?.firstOrNull() ?: unpacked
-            destDir.deleteRecursively()
             destDir.parentFile?.mkdirs()
-            check(inner.renameTo(destDir)) { "Could not finish installing the bundle." }
+            // Stage the existing bundle aside rather than deleting it: a failed rename
+            // used to cost the user a working 111 MB recogniser with no way back.
+            val previous = File(context.cacheDir, "${destDir.name}.previous")
+            previous.deleteRecursively()
+            if (destDir.isDirectory && !destDir.renameTo(previous)) {
+                error("Could not stage the existing bundle aside.")
+            }
+            if (!inner.renameTo(destDir)) {
+                if (previous.isDirectory) previous.renameTo(destDir)
+                error("Could not finish installing the bundle.")
+            }
+            previous.deleteRecursively()
         } finally {
             stage.deleteRecursively()
         }

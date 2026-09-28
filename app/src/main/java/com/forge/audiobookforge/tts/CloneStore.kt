@@ -52,7 +52,7 @@ class CloneStore(private val root: File) {
      * is chosen so the user is not told after typing a transcript.
      */
     fun problemWith(bytes: ByteArray): String? {
-        val audio = RefAudio.readBytes(bytes)
+        val audio = runCatching { RefAudio.readBytes(bytes) }.getOrNull()
             ?: return "That file is not audio the engine can use. Use a WAV file " +
                 "(16-bit PCM or 32-bit float, 8–96 kHz)."
         // A file that parses can still be useless: a truncated download gives a valid

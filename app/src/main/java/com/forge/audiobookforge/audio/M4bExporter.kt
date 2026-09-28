@@ -184,7 +184,8 @@ object M4bExporter {
             )
         }
         if (textTrack >= 0) {
-            appleOk = runCatching { ChapterBox.injectChapReference(tmp); true }.getOrDefault(false)
+            // Trust the return value, not merely the absence of an exception.
+            appleOk = runCatching { ChapterBox.injectChapReference(tmp) }.getOrDefault(false)
         }
         // No hand-built fallback: constructing binary boxes that must satisfy
         // every parser proved worse than honest absence. Refusing ROMs ship
@@ -310,7 +311,13 @@ internal object ChapterBox {
      * is the chapter system iTunes/iOS/every serious player reads; chpl alone
      * proved insufficient in the wild (v0.6.x field reports).
      */
-    fun injectChapReference(f: File) {
+    /**
+     * @return true only when a tref/chap reference was actually written. It returns
+     * normally (having done nothing) when the file has fewer than two tracks or the
+     * handler subtypes are unexpected, so a Unit return made "appleOk" claim chapters
+     * that were never embedded.
+     */
+    fun injectChapReference(f: File): Boolean {
         val moov = locateMoov(f) ?: error("chap ref: moov not found | len=${f.length()}")
         val (moovOff, moovLen) = moov
         check(moovOff + moovLen >= f.length()) { "moov not final atom (chap)" }
@@ -328,7 +335,7 @@ internal object ChapterBox {
         }
         // Single-track output (text track rejected by this ROM, or user disabled
         // Apple chapters): nothing to wire — chpl chapters are already present.
-        if (traks.size < 2) return
+        if (traks.size < 2) return false
 
         fun hdlrSubtype(trak: ByteArray): String? {
             // walk children -> mdia -> children -> hdlr; subtype at offset 16..20 of hdlr payload
@@ -377,7 +384,7 @@ internal object ChapterBox {
         }
         // Unrecognized handler layout: ship without tref rather than fail.
         // Nero chpl remains embedded for players that read it.
-        if (audioIdx < 0 || textIdx < 0 || textId <= 0) return
+        if (audioIdx < 0 || textIdx < 0 || textId <= 0) return false
 
         // Build tref box containing chap -> textId
         val chapPayload = ByteArray(4)
@@ -424,6 +431,7 @@ internal object ChapterBox {
         // Self-verify: 'chap' must now exist inside moov bytes on disk
         val verify = readAt(f, moovOff, newMoov.size)
         check(String(verify, Charsets.ISO_8859_1).contains("chap")) { "chap self-check failed" }
+        return true
     }
 
     private fun locateMoov(f: File): Pair<Long, Int>? =
@@ -485,11 +493,17 @@ internal object ChapterBox {
                 // inside media data, and with a zero size field that looks exactly like a
                 // box running to EOF. Editing such a candidate would corrupt the file, so
                 // require the child atom a real movie header must begin with.
-                // A box payload starts with the first child's SIZE (4 bytes), then its
-                // type - so the child's type sits at +12, not +8. (Reading +8 would
-                // have rejected every genuine file.)
-                val child = ByteArray(4).also { raf.seek(bs + 12); raf.readFully(it) }
-                if (String(child, Charsets.US_ASCII) in MOOV_CHILDREN) return bs to size
+                // A payload begins with the first child's SIZE then its type, so the
+                // child's type sits at +12. A largesize box (s32 == 1) has a 16-byte
+                // header, putting it at +20 - using +12 there reads the high half of the
+                // largesize and rejects a perfectly good box.
+                val childTypeAt = if (s32 == 1) 20 else 12
+                val child = runCatching {
+                    ByteArray(4).also { raf.seek(bs + childTypeAt); raf.readFully(it) }
+                }.getOrNull()
+                if (child != null && String(child, Charsets.US_ASCII) in MOOV_CHILDREN) {
+                    return bs to size
+                }
             }
         }
         val detail = candidates.toList().asReversed().take(3).joinToString("; ") { bs ->

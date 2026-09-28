@@ -35,40 +35,39 @@ object BookExporter {
             val src = chapter.audioFile?.let { File(audioDir, it) } ?: continue
             if (!src.isFile) continue
             val exportName = docName(chapter.index, chapter.title, src)
+            // Written under a temporary name first: the previous export must survive until
+            // the replacement is complete, or a failed insert/copy (no space, I/O error)
+            // leaves the user with nothing where they had a working file.
+            val tempName = exportName.substringBeforeLast('.') + ".tmp." + exportName.substringAfterLast('.')
             val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
+                put(MediaStore.Audio.Media.DISPLAY_NAME, tempName)
                 put(MediaStore.Audio.Media.MIME_TYPE, mimeFor(src.name))
                 put(MediaStore.Audio.Media.RELATIVE_PATH, relDir)
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
-            }
-            // Replace an earlier export of this chapter rather than piling up
-            // "(2)", "(3)", "(4)" copies every time the book is exported again.
-            // MediaStore stores RELATIVE_PATH with a trailing slash.
-            runCatching {
-                // Replaces this chapter's earlier export, including any "(2)", "(3)"
-                // copies older builds left behind, so the folder heals itself.
-                resolver.delete(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
-                        "(${MediaStore.MediaColumns.DISPLAY_NAME}=? OR " +
-                        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?)",
-                    arrayOf(
-                        "$relDir/",
-                        exportName,
-                        exportName.substringBeforeLast('.') + " (%." + exportName.substringAfterLast('.'),
-                    ),
-                )
             }
             val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values) ?: continue
             try {
                 resolver.openOutputStream(uri)?.use { out ->
                     src.inputStream().use { it.copyTo(out) }
+                } ?: error("Could not open the export destination")
+                // The replacement is on disk. Only now retire the earlier copy, including
+                // any legacy "(2)", "(3)" duplicates, then publish the real name.
+                runCatching {
+                    resolver.delete(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND (" +
+                            "${MediaStore.MediaColumns.DISPLAY_NAME}=? OR " +
+                            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? ESCAPE '\\')",
+                        arrayOf("$relDir/", exportName, legacyCopyPattern(exportName)),
+                    )
                 }
                 values.clear()
                 values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+                values.put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
                 resolver.update(uri, values, null, null)
                 exported++
             } catch (t: Throwable) {
+                // Removes only the half-written new row; the old export is untouched.
                 runCatching { resolver.delete(uri, null, null) }
             }
         }
@@ -129,6 +128,17 @@ object BookExporter {
 
     private fun docName(index: Int, title: String, src: File): String =
         "%03d - %s.%s".format(index + 1, sanitize(title), src.extension)
+
+    /**
+     * LIKE pattern matching the "(2)", "(3)" copies older builds left behind
+     * ("name (2).m4a"). `_` is a LIKE wildcard, so it is escaped — a chapter titled
+     * "Chapter X1" would otherwise over-match "Chapter X2".
+     */
+    internal fun legacyCopyPattern(exportName: String): String {
+        val base = exportName.substringBeforeLast('.').replace("_", "\\_")
+        val ext = exportName.substringAfterLast('.').replace("_", "\\_")
+        return "$base (%$ext"
+    }
 
     internal fun mimeFor(fileName: String): String =
         when { fileName.endsWith(".ogg", true) -> "audio/ogg"; fileName.endsWith(".wav", true) -> "audio/wav"; else -> "audio/mp4" }

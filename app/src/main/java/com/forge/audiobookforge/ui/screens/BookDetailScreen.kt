@@ -158,10 +158,15 @@ fun BookDetailScreen(bookId: String?) {
                     OutlinedButton(enabled = !singleVoice && (voiceOptions.isNotEmpty() || cloneOptions.isNotEmpty()), onClick = { voiceMenu = true }) {
                         Text(
                             when {
-                                cloneMode -> "Voice: " + (
-                                    book.cloneName ?: cloneOptions.firstOrNull()?.name
-                                        ?: "add one in Settings"
-                                    )
+                                cloneMode -> {
+                                    val chosen = book.cloneName
+                                    val present = chosen != null && cloneOptions.any { it.name == chosen }
+                                    val effective = if (present) chosen else cloneOptions.firstOrNull()?.name
+                                    // Never show the name of a deleted clone while a different
+                                    // voice is what will actually speak.
+                                    "Voice: " + (effective ?: "add one in Settings") +
+                                        if (chosen != null && !present) " (previous voice is gone)" else ""
+                                }
                                 singleVoice || voiceOptions.isEmpty() -> "Voice: built-in"
                                 else -> {
                                     val chosen = voiceOptions.firstOrNull { it.sid == book.voiceSid }
@@ -386,7 +391,10 @@ fun BookDetailScreen(bookId: String?) {
                                                             "Partial bundle: ${res.chapters}/${book.chapters.size}"
                                                         else
                                                             "Full book bundled: ${res.chapters} chapters") +
-                                                        " · " + res.anatomy,
+                                                        " · " + res.anatomy +
+                                                        if (res.skippedChapters.isEmpty()) ""
+                                                        else " · skipped ${res.skippedChapters.size} unreadable: " +
+                                                            res.skippedChapters.take(2).joinToString(", "),
                                                     )
                                                 } catch (t: Throwable) {
                                                     snackbar.showSnackbar(t.message ?: t.javaClass.simpleName)

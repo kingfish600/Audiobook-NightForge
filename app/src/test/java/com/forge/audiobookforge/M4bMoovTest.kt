@@ -68,6 +68,33 @@ class M4bMoovTest {
     }
 
     /**
+     * A largesize box (size field == 1) carries a 16-byte header, so its first child's
+     * type sits at +20, not +12. Reading +12 lands on the high half of the largesize and
+     * rejects a perfectly good movie box — the 32-bit assumption that was almost shipped.
+     */
+    @Test
+    fun acceptsA64BitLargesizeMoov() {
+        val child = box("mvhd", ByteArray(112))
+        val total = 16 + child.size
+        val moov = ByteArray(total)
+        java.nio.ByteBuffer.wrap(moov).order(java.nio.ByteOrder.BIG_ENDIAN).putInt(1)
+        "moov".toByteArray(Charsets.US_ASCII).copyInto(moov, 4)
+        java.nio.ByteBuffer.wrap(moov, 8, 8).order(java.nio.ByteOrder.BIG_ENDIAN)
+            .putLong(total.toLong())
+        child.copyInto(moov, 16)
+
+        val fty = box("ftyp", ByteArray(16))
+        val f = fileOf(fty, moov)
+        try {
+            val (off, len) = ChapterBox.locateMoovRobust(f)
+            assertEquals(fty.size.toLong(), off)
+            assertEquals("a 64-bit moov must not be rejected", total, len)
+        } finally {
+            f.delete()
+        }
+    }
+
+    /**
      * The layout that broke the export: ftyp + moov + mdat. The moov is real but not
      * last, and injecting a larger one would shift every chunk offset — so this must
      * be refused rather than edited.

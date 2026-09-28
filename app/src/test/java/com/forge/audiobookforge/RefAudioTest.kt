@@ -72,6 +72,35 @@ class RefAudioTest {
         assertNull("truncated", RefAudio.readBytes(ByteArray(10)))
     }
 
+    /**
+     * A chunk size is read as a SIGNED int, so 0xFFFFFFF8 arrives as -8 and
+     * "pos += 8 + sz" advances the cursor by zero — an endless loop, on the main
+     * thread, reached straight from the file picker (a permanent ANR). Worse values
+     * threw StringIndexOutOfBoundsException out of the callback. A timeout is used
+     * deliberately: without the bound this test fails rather than hanging the suite.
+     */
+    @Test(timeout = 5_000)
+    fun aHostileChunkSizeCannotStallOrThrow() {
+        for (declared in listOf(0xFFFFFFF8L, 0xFFFFFFF7L, 0xFFFFFFF9L, 0x80000000L, 0xFFFFFFFFL)) {
+            val bytes = wavWithChunkDeclaring(declared)
+            assertNull(
+                "a chunk declaring 0x${declared.toString(16)} must be refused",
+                RefAudio.readBytes(bytes),
+            )
+        }
+    }
+
+    /** RIFF + fmt + a chunk whose declared size is [declared] + a well-formed data chunk. */
+    private fun wavWithChunkDeclaring(declared: Long): ByteArray {
+        val buf = ByteBuffer.allocate(12 + 24 + 16 + 8 + 16).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put("RIFF".toByteArray()); buf.putInt(0); buf.put("WAVE".toByteArray())
+        buf.put("fmt ".toByteArray()); buf.putInt(16); buf.putShort(1); buf.putShort(1)
+        buf.putInt(22_050); buf.putInt(44_100); buf.putShort(2); buf.putShort(16)
+        buf.put("junk".toByteArray()); buf.putInt(declared.toInt()); buf.put(ByteArray(16))
+        buf.put("data".toByteArray()); buf.putInt(8); buf.put(ByteArray(8))
+        return buf.array()
+    }
+
     @Test
     fun resampleKeepsDurationAndStaysInRange() {
         val src = FloatArray(1000) { 0.5f }

@@ -42,7 +42,15 @@ object RefAudio {
                 dataLen = minOf(sz, len - dataOff)
                 break
             }
-            pos += 8 + sz + (sz and 1)
+            // A hostile or corrupt size must not stall or overrun the walk. The size is
+            // read as a SIGNED int, so 0xFFFFFFF8 arrives as -8 and "pos += 8 + sz"
+            // advances by zero: an endless loop, reached from a file-picker callback on
+            // the main thread (an ANR). A huge value could also step past the buffer.
+            if (sz < 0) return null
+            val step = 8 + sz + (sz and 1)
+            if (step <= 8) return null
+            pos += step
+            if (pos < 0 || pos > len) break
         }
         if (fmtOff < 0 || dataOff < 0 || dataLen <= 0) return null
 
