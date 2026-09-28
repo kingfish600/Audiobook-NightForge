@@ -91,7 +91,12 @@ class ConversionWorker(
         }
         log("engine loaded from ${modelDir.name}, sampleRate=${engine.sampleRate()}, speakers=${engine.numSpeakers()}")
 
-        setForeground(createForegroundInfo(book.title, 0f, "Starting…"))
+        // Android 12+ can refuse a foreground start when the app is backgrounded
+        // (ForegroundServiceStartNotAllowedException). Uncaught, that killed the run and
+        // wedged the controller in Running with no way out but a manual Stop. Carry on
+        // un-foregrounded instead: slower, but it finishes and reports properly.
+        runCatching { setForeground(createForegroundInfo(book.title, 0f, "Starting…")) }
+            .onFailure { log("foreground start refused (${it.javaClass.simpleName}) — continuing") }
         postProgress(applicationContext, book.title, 0f, "Preparing…")
 
         // Hold the CPU on through Doze/screen-off — OEM throttling otherwise
@@ -229,8 +234,10 @@ class ConversionWorker(
         ch.status = ChapterStatus.RENDERING
         repo.save(book)
 
-        // Punctuation-only fragments (dialogue dashes, stray quotes) can hang the
-        // native phonemizer — never feed them to the engine.
+        // Punctuation-only fragments (dialogue dashes, stray quotes) carry no speech, so
+        // they are filtered out. A chapter that is ONLY punctuation still gets its first
+        // fragment via the fallback below, which yields a short silent clip — verified on
+        // the device not to hang the phonemizer (an older comment here claimed it could).
         val allChunks = TextOps.splitIntoChunks(ch.text, maxLen = segmentLen)
         val speakable = allChunks.filter { it.any { c -> c.isLetterOrDigit() } }
         val chunks = speakable.ifEmpty { listOf(allChunks.firstOrNull() ?: "…") }
@@ -278,7 +285,7 @@ class ConversionWorker(
                         reference = reference,
                         steps = cloneSteps,
                     ),
-                ) { "Engine not loaded" }
+                ) { "No voice available for this chapter — check the installed engine or pick a cloned voice." }
                 val pcm = if (audio.sampleRate != sampleRate) {
                     com.forge.audiobookforge.audio.AudioOps.resampleLinear(audio.samples, audio.sampleRate, sampleRate)
                 } else audio.samples
@@ -340,6 +347,13 @@ class ConversionWorker(
                 ChapterStatus.PENDING
             } else {
                 ChapterStatus.FAILED
+            }
+            if (ch.status == ChapterStatus.FAILED) {
+                // No audio survives this path, so no duration or file name may either.
+                // The degenerate-output guard throws through here, which makes this the
+                // most reachable FAILED path of the two.
+                ch.durationMs = 0L
+                ch.audioFile = null
             }
             runCatching {
                 writer?.close() ?: wavOut?.let { com.forge.audiobookforge.audio.Wav.finish(it) }

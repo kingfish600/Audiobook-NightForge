@@ -163,6 +163,10 @@ class KokoroEngine {
             tts = OfflineTts(assetManager = null, config = config)
             loadedDir = modelDir
             kind = family
+            // Read once, here, on the loading thread. numSpeakers() is @Synchronized and
+            // was being called during Compose composition, so a UI rebuild mid-render
+            // blocked the main thread behind a chunk of synthesis.
+            loadedSpeakers = runCatching { tts?.numSpeakers() ?: 0 }.getOrDefault(0)
             null
         } catch (t: Throwable) {
             // Init failed: the previous engine (if any) is untouched — the
@@ -175,6 +179,15 @@ class KokoroEngine {
     // moment by load()/release() on another thread.
     @Synchronized
     fun sampleRate(): Int = try { tts?.sampleRate() ?: 24000 } catch (_: Throwable) { 24000 }
+
+    /**
+     * Speaker count of the loaded engine, captured at load time so the UI never has to
+     * call into native code while composing (that call is synchronized and can wait
+     * behind a whole chunk of synthesis).
+     */
+    @Volatile
+    var loadedSpeakers: Int = 0
+        private set
 
     @Synchronized
     fun numSpeakers(): Int = try { tts?.numSpeakers() ?: 0 } catch (_: Throwable) { 0 }

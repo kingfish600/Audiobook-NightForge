@@ -138,7 +138,9 @@ fun BookDetailScreen(bookId: String?) {
                         container.kokoroEngine.loadedDir == activeModelDir
                     val effectiveKind = if (loadedIsActive) engineKind
                         else activeModelDir?.let { ModelManager.bundleKind(it) }
-                    val speakerCount = if (loadedIsActive) container.kokoroEngine.numSpeakers() else 0
+                    // Cached at load time; calling numSpeakers() here (during
+                    // composition) could block the main thread behind a render chunk.
+                    val speakerCount = if (loadedIsActive) container.kokoroEngine.loadedSpeakers else 0
                     val isKokoro = effectiveKind == null || effectiveKind == ModelManager.EngineKind.KOKORO
                     // A cloning engine has no voices of its own — it speaks as whichever
                     // reference clip you give it, so the picker offers the cloned-voice

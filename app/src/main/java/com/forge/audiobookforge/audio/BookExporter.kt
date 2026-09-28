@@ -97,15 +97,22 @@ object BookExporter {
             val src = chapter.audioFile?.let { File(audioDir, it) } ?: continue
             if (!src.isFile) continue
             val name = docName(chapter.index, chapter.title, src)
-            // Replace an earlier copy of the same chapter instead of duplicating.
-            childByName(context, bookDir, name)?.let { resolver.delete(it, null, null) }
-            val doc = DocumentsContract.createDocument(resolver, bookDir, mimeFor(src.name), name) ?: continue
+            // Same discipline as the MediaStore path: write the replacement under a
+            // temporary name, retire the old copy only once it is complete, then rename.
+            // Deleting first (as this did) meant a failed copy destroyed the previous
+            // export — the last real data-loss window in the app.
+            val tempName = name.substringBeforeLast('.') + ".tmp." + name.substringAfterLast('.')
+            val doc = DocumentsContract.createDocument(resolver, bookDir, mimeFor(src.name), tempName)
+                ?: continue
             try {
                 resolver.openOutputStream(doc)?.use { out ->
                     src.inputStream().use { it.copyTo(out) }
-                }
+                } ?: error("Could not open the export destination")
+                childByName(context, bookDir, name)?.let { resolver.delete(it, null, null) }
+                runCatching { DocumentsContract.renameDocument(resolver, doc, name) }
                 exported++
             } catch (t: Throwable) {
+                // Removes only the half-written replacement; the old export is intact.
                 runCatching { resolver.delete(doc, null, null) }
             }
         }

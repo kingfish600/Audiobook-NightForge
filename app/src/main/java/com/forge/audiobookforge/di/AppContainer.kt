@@ -60,7 +60,12 @@ class AppContainer(private val context: Context) : ContainerApi {
         // A model change invalidates the loaded engine: the bundle may have been
         // deleted, and a stale engine answers numSpeakers() for the wrong model.
         models.onModelChanged = {
-            kokoroEngine.release()
+            // Deliberately NOT releasing the engine here. release() is @Synchronized and
+            // the worker holds that monitor for a whole chunk (10-30 s Kokoro, ~100 s
+            // ZipVoice), so doing it inline from a UI action ANR'd the app during a
+            // render — while the UI advertised switching with no restart. Nothing needs
+            // it either: load() swaps engines in-process on the next synthesis, and the
+            // picker already ignores an engine whose directory is not the active model.
             // A cloning engine ships reference clips with their transcripts —
             // import them so voice cloning works with zero setup. Idempotent.
             models.ui.value.modelDir?.let { dir ->

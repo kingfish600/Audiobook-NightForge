@@ -82,7 +82,7 @@ class RefAudioTest {
      */
     @Test(timeout = 5_000)
     fun aHostileChunkSizeCannotStallOrThrow() {
-        for (declared in listOf(0xFFFFFFF8L, 0xFFFFFFF7L, 0xFFFFFFF9L, 0x80000000L, 0xFFFFFFFFL)) {
+        for (declared in listOf(0xFFFFFFF8L, 0xFFFFFFF7L, 0xFFFFFFF9L, 0x80000000L, 0xFFFFFFFFL, 0x7FFFFFFFL)) {
             val bytes = wavWithChunkDeclaring(declared)
             assertNull(
                 "a chunk declaring 0x${declared.toString(16)} must be refused",

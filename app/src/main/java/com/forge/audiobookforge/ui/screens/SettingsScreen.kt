@@ -624,7 +624,13 @@ fun SettingsScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
-        OutlinedButton(onClick = { container.kokoroEngine.release() }) {
+        OutlinedButton(onClick = {
+            // Off the main thread: release() waits on the monitor the render thread holds
+            // for an entire chunk.
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { container.kokoroEngine.release() }
+            }
+        }) {
             Text("Unload engine from memory")
         }
 
