@@ -34,11 +34,30 @@ object BookExporter {
         for (chapter in book.chapters) {
             val src = chapter.audioFile?.let { File(audioDir, it) } ?: continue
             if (!src.isFile) continue
+            val exportName = docName(chapter.index, chapter.title, src)
             val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, docName(chapter.index, chapter.title, src))
+                put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
                 put(MediaStore.Audio.Media.MIME_TYPE, mimeFor(src.name))
                 put(MediaStore.Audio.Media.RELATIVE_PATH, relDir)
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
+            }
+            // Replace an earlier export of this chapter rather than piling up
+            // "(2)", "(3)", "(4)" copies every time the book is exported again.
+            // MediaStore stores RELATIVE_PATH with a trailing slash.
+            runCatching {
+                // Replaces this chapter's earlier export, including any "(2)", "(3)"
+                // copies older builds left behind, so the folder heals itself.
+                resolver.delete(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
+                        "(${MediaStore.MediaColumns.DISPLAY_NAME}=? OR " +
+                        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?)",
+                    arrayOf(
+                        "$relDir/",
+                        exportName,
+                        exportName.substringBeforeLast('.') + " (%." + exportName.substringAfterLast('.'),
+                    ),
+                )
             }
             val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values) ?: continue
             try {
@@ -111,7 +130,7 @@ object BookExporter {
     private fun docName(index: Int, title: String, src: File): String =
         "%03d - %s.%s".format(index + 1, sanitize(title), src.extension)
 
-    private fun mimeFor(fileName: String): String =
+    internal fun mimeFor(fileName: String): String =
         when { fileName.endsWith(".ogg", true) -> "audio/ogg"; fileName.endsWith(".wav", true) -> "audio/wav"; else -> "audio/mp4" }
 
     /**

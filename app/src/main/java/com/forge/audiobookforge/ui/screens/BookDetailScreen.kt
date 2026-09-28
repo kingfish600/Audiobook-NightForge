@@ -331,8 +331,11 @@ fun BookDetailScreen(bookId: String?) {
                                                 )
                                             }
                                             snackbar.showSnackbar(
-                                                if (count > 0) "Exported $count chapter(s)"
-                                                else "Nothing exported — no finished chapter files found"
+                                                if (count > 0) {
+                                                    "Exported $count of ${book.doneCount} chapter(s)"
+                                                } else {
+                                                    "Nothing exported — no finished chapter files found"
+                                                },
                                             )
                                         }
                                     },
