@@ -207,6 +207,9 @@ class ModelManager(private val context: Context) {
                 update { it.copy(indeterminate = false) }
             }
 
+            // A previous failure may have left the only good copy in ".backup"; rescue it
+            // before this download creates a fresh backup directory over the top.
+            restoreStrandedBackups()
             val backup = File(modelsRoot, option.id + ".backup").apply { deleteRecursively() }
             val hadOld = target.isDirectory && target.renameTo(backup)
             if (!inner.renameTo(target)) {
@@ -271,8 +274,16 @@ class ModelManager(private val context: Context) {
             modelsRoot.listFiles { f -> f.isDirectory && f.name.endsWith(".backup") }?.forEach { b ->
                 val original = File(modelsRoot, b.name.removeSuffix(".backup"))
                 if (!bundleComplete(original)) {
-                    original.deleteRecursively()
-                    b.renameTo(original)
+                    // Move the unusable bundle aside and only then promote the backup, so a
+                    // failed rename cannot destroy both copies.
+                    val bad = File(modelsRoot, original.name + ".unusable")
+                    bad.deleteRecursively()
+                    if (original.isDirectory && !original.renameTo(bad)) return@forEach
+                    if (!b.renameTo(original)) {
+                        if (bad.isDirectory) bad.renameTo(original)   // put it back
+                        return@forEach
+                    }
+                    bad.deleteRecursively()
                 } else {
                     b.deleteRecursively()
                 }

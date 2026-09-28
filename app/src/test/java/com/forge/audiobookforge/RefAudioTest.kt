@@ -4,6 +4,7 @@ import com.forge.audiobookforge.audio.RefAudio
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,6 +100,25 @@ class RefAudioTest {
         buf.put("junk".toByteArray()); buf.putInt(declared.toInt()); buf.put(ByteArray(16))
         buf.put("data".toByteArray()); buf.putInt(8); buf.put(ByteArray(8))
         return buf.array()
+    }
+
+    /**
+     * A zero-length ancillary chunk is legal (and common). Rejecting it refused valid
+     * files: tightening the walk to stop a hostile size made `step == 8` look hostile,
+     * when it simply means "empty chunk, advance 8".
+     */
+    @Test
+    fun acceptsAFileWithAnEmptyAncillaryChunk() {
+        val buf = ByteBuffer.allocate(12 + 24 + 8 + 8 + 16).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put("RIFF".toByteArray()); buf.putInt(0); buf.put("WAVE".toByteArray())
+        buf.put("fmt ".toByteArray()); buf.putInt(16); buf.putShort(1); buf.putShort(1)
+        buf.putInt(22_050); buf.putInt(44_100); buf.putShort(2); buf.putShort(16)
+        buf.put("junk".toByteArray()); buf.putInt(0)                 // empty chunk
+        buf.put("data".toByteArray()); buf.putInt(8); buf.put(ByteArray(8))
+        val r = RefAudio.readBytes(buf.array())
+        assertNotNull("an empty ancillary chunk must not disqualify the file", r)
+        assertEquals(22_050, r!!.second)
+        assertEquals(4, r.first.size)
     }
 
     @Test

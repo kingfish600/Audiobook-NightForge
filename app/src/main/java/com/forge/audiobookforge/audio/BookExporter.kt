@@ -50,8 +50,12 @@ object BookExporter {
                 resolver.openOutputStream(uri)?.use { out ->
                     src.inputStream().use { it.copyTo(out) }
                 } ?: error("Could not open the export destination")
-                // The replacement is on disk. Only now retire the earlier copy, including
-                // any legacy "(2)", "(3)" duplicates, then publish the real name.
+                // Publish the replacement FIRST (still under its temporary name), so the
+                // user has a usable file even if everything after this line fails. Only
+                // then retire the earlier copy, and rename last of all.
+                values.clear()
+                values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
                 runCatching {
                     resolver.delete(
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -61,10 +65,12 @@ object BookExporter {
                         arrayOf("$relDir/", exportName, legacyCopyPattern(exportName)),
                     )
                 }
-                values.clear()
-                values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-                values.put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
-                resolver.update(uri, values, null, null)
+                runCatching {
+                    val rename = ContentValues().apply {
+                        put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
+                    }
+                    resolver.update(uri, rename, null, null)
+                }
                 exported++
             } catch (t: Throwable) {
                 // Removes only the half-written new row; the old export is untouched.

@@ -158,6 +158,7 @@ class ConversionWorker(
                     // endRun() used to wipe the failure, said nothing about why).
                     ch.status = ChapterStatus.FAILED
                     ch.audioFile = null
+                    ch.durationMs = 0L      // no stale duration for a chapter with no audio
                     repo.save(book)
                     doneFile.delete()
                     unreadable += ch.title
@@ -175,6 +176,19 @@ class ConversionWorker(
                     "chapter ${ch.index} DONE: '${ch.title}' duration=${ch.durationMs}ms " +
                         "file=${doneFile.name} bytes=${doneFile.length()}"
                 )
+            }
+            // The run finished, but not cleanly. Say so: collecting the unreadable titles
+            // and never reporting them let a run look successful while chapters were
+            // missing. Reported before endRun(), which now preserves a Failed state.
+            if (unreadable.isNotEmpty()) {
+                failed = true
+                val summary = "${unreadable.size} chapter(s) produced no usable audio: " +
+                    unreadable.take(3).joinToString(", ") +
+                    (if (unreadable.size > 3) " …" else "") +
+                    " — render those chapters again."
+                log(summary)
+                controller.fail(summary, book.id)
+                postProgress(applicationContext, book.title, 1f, summary)
             }
         } catch (_: kotlinx.coroutines.CancellationException) {
             // WorkManager cancelled us: state already saved per chapter, treat as graceful stop

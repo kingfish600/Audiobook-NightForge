@@ -71,7 +71,10 @@ fun BookDetailScreen(bookId: String?) {
     }
 
     val running = (conversion as? ConversionState.Running)?.takeIf { it.bookId == book.id }
-    val failed = conversion as? ConversionState.Failed
+    // Filtered by book: the Failed state is deliberately persistent now, so without this
+    // an unrelated book displayed the previous book's failure.
+    val failed = (conversion as? ConversionState.Failed)
+        ?.takeIf { it.bookId == null || it.bookId == book.id }
     val runningElsewhere = (conversion as? ConversionState.Running)?.takeIf { it.bookId != book.id }
 
     val snackbar = remember { SnackbarHostState() }

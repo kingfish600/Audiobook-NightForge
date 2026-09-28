@@ -48,7 +48,9 @@ object RefAudio {
             // the main thread (an ANR). A huge value could also step past the buffer.
             if (sz < 0) return null
             val step = 8 + sz + (sz and 1)
-            if (step <= 8) return null
+            // step == 8 is a legitimately EMPTY chunk (size 0) and must simply advance;
+            // rejecting it refused valid files. sz >= 0 already guarantees progress.
+            if (step < 8) return null
             pos += step
             if (pos < 0 || pos > len) break
         }
