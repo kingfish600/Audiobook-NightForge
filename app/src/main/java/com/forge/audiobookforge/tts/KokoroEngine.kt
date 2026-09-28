@@ -32,7 +32,8 @@ class KokoroEngine {
 
     var loadedDir: File? = null; private set
     var kind: ModelManager.EngineKind? = null; private set
-    val isLoaded: Boolean get() = tts != null
+    val isLoaded: Boolean
+        @Synchronized get() = tts != null
 
     /**
      * Loads [modelDir], switching engines IN-PROCESS when a different one is already
@@ -141,8 +142,12 @@ class KokoroEngine {
         }
     }
 
-    fun sampleRate(): Int = tts?.sampleRate() ?: 24000
+    // Synchronized: these touch the native engine, which may be freed at any
+    // moment by load()/release() on another thread.
+    @Synchronized
+    fun sampleRate(): Int = try { tts?.sampleRate() ?: 24000 } catch (_: Throwable) { 24000 }
 
+    @Synchronized
     fun numSpeakers(): Int = try { tts?.numSpeakers() ?: 0 } catch (_: Throwable) { 0 }
 
     @Synchronized
@@ -169,10 +174,16 @@ class KokoroEngine {
      */
     @Synchronized
     fun release() {
-        runCatching { tts?.release() }
+        // Publish the cleared field FIRST, then free the native object. Doing it
+        // the other way round left a window where another thread saw a non-null
+        // engine whose native pointer had already been deleted, and
+        // numSpeakers()/generate() then dereferenced null inside the JNI
+        // (SIGSEGV, verified from a device tombstone).
+        val old = tts
         tts = null
         loadedDir = null
         kind = null
+        runCatching { old?.release() }
     }
 
     companion object {
