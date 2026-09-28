@@ -713,6 +713,16 @@ private fun RecordVoiceDialog(
         },
         text = {
             Column {
+                // Shown FIRST: this dialog is tall, and a rejection message placed at
+                // the end lands below the screen, so a failed take looked ignored.
+                status?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 when (phase) {
                     "script" -> {
                         if (com.forge.audiobookforge.tts.CloneScripts.languages.size > 1) {
@@ -794,14 +804,6 @@ private fun RecordVoiceDialog(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                }
-                status?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
                 }
             }
         },
