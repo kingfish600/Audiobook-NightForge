@@ -143,10 +143,6 @@ class LibraryRepository(private val context: Context) {
     }
 
     @Synchronized
-    fun delete(book: Book) {
-        dirFor(book.id).deleteRecursively()
-        reload()
-    }
 
     private fun queryDisplayName(uri: Uri): String? =
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)

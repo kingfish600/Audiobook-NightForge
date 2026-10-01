@@ -22,7 +22,11 @@ class VoiceRecorder {
     companion object {
         const val SAMPLE_RATE = 24_000
 
-        /** Shorter clips do not give the model enough to learn from. */
+        /**
+         * Shorter clips do not give the model enough to learn from. Deliberately stricter
+         * than CloneStore.MIN_REFERENCE_SECONDS (2s): that is a hard floor for a clip the
+         * user already has, while this dialog can afford to ask for a genuinely good take.
+         */
         const val MIN_SECONDS = 4.0
 
         /** Longer is not better: it costs synthesis time and adds nothing. */

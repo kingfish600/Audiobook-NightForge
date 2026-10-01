@@ -65,13 +65,22 @@ object BookExporter {
                         arrayOf("$relDir/", exportName, legacyCopyPattern(exportName)),
                     )
                 }
-                runCatching {
+                val renamed = runCatching {
                     val rename = ContentValues().apply {
                         put(MediaStore.Audio.Media.DISPLAY_NAME, exportName)
                     }
                     resolver.update(uri, rename, null, null)
+                }.getOrDefault(0)
+                if (renamed > 0) {
+                    exported++
+                } else {
+                    // The audio is on disk but still under its temporary name. Counted
+                    // separately from a clean export so the reported number stays true.
+                    android.util.Log.w(
+                        "NightForge",
+                        "export: $tempName written but not renamed to $exportName",
+                    )
                 }
-                exported++
             } catch (t: Throwable) {
                 // Removes only the half-written new row; the old export is untouched.
                 runCatching { resolver.delete(uri, null, null) }

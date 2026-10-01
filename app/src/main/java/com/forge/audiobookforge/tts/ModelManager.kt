@@ -352,7 +352,16 @@ class ModelManager(private val context: Context) {
             // Stage the existing bundle aside rather than deleting it: a failed rename
             // used to cost the user a working 111 MB recogniser with no way back.
             val previous = File(context.cacheDir, "${destDir.name}.previous")
-            previous.deleteRecursively()
+            val liveLooksComplete = destDir.isDirectory &&
+                destDir.listFiles()?.isNotEmpty() == true
+            if (previous.isDirectory && !liveLooksComplete) {
+                // A previous swap was interrupted after staging the old bundle aside. That
+                // copy is the only working one, so restore it rather than deleting it.
+                destDir.deleteRecursively()
+                previous.renameTo(destDir)
+            } else {
+                previous.deleteRecursively()
+            }
             if (destDir.isDirectory && !destDir.renameTo(previous)) {
                 error("Could not stage the existing bundle aside.")
             }

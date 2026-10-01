@@ -19,7 +19,11 @@ class CloneStore(private val root: File) {
     data class Clone(val name: String, val wav: File, val text: String)
 
     companion object {
-        /** Below this a reference teaches the model almost nothing. */
+        /**
+         * Below this a reference teaches the model almost nothing. This is the hard floor for
+         * an imported clip; the in-app recorder asks for more (VoiceRecorder.MIN_SECONDS, 4s)
+         * because it can guide the user there.
+         */
         const val MIN_REFERENCE_SECONDS = 2.0
     }
 

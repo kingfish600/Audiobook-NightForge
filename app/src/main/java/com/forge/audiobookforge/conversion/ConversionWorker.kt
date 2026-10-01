@@ -36,6 +36,13 @@ import java.io.File
  * Enqueued with setRequiresCharging(true) so heavy synthesis only runs on wall power —
  * that single constraint is what turns "TTS drains my battery" into "free while charging".
  */
+/**
+ * Comfortably above the slowest legitimate case (cloning is ~6x realtime on this hardware),
+ * so this fires only when something is genuinely wrong — a pathological segment length, or a
+ * device throttling hard. One line saying so turns a mysterious crawl into a diagnosis.
+ */
+private const val HIGH_RTF_WARN = 10.0
+
 class ConversionWorker(
     appContext: Context,
     params: WorkerParameters,
@@ -341,6 +348,20 @@ class ConversionWorker(
                         text = "${ch.title} · ${n + 1}/${chunks.size} segments · ETA ~${etaMin}m",
                     )
                 }
+            }
+            // A runaway render (a pathological segment length, a throttled device) shows up
+            // as RTF in the tens or hundreds. One line saying so would have caught the
+            // seg=5 regression immediately, instead of 40 minutes of one-word chunks.
+            val chapterRtf = rtfWindow.average().toFloat()
+            if (chapterRtf > HIGH_RTF_WARN) {
+                val msg = "Rendering unusually slowly (RTF %.0f) — check Segment length and " +
+                    "Cloning steps in Settings.".format(chapterRtf)
+                log("WARNING: $msg")
+                postProgress(
+                    applicationContext, book.title,
+                    (charsDoneOverall + charsDone).toFloat() / charsTotalOverall,
+                    msg,
+                )
             }
             if (degenerateChunks >= 2 && degenerateChunks * 2 >= chunks.size) {
                 throw IllegalStateException(
