@@ -15,7 +15,7 @@ Pick one engine, or install several and switch between them without restarting t
 
 | Engine | Size | Languages | Notes |
 |---|---|---|---|
-| **Kokoro 82M fp32** | ≈440 MB | 8 + Mandarin | Best quality, and **usually the fastest on modern ARM** — see the benchmark below |
+| **Kokoro 82M fp32** | ≈440 MB | 8 + Mandarin | Best quality, and **usually the fastest on modern ARM** — see the benchmark below. Needs ~900 MB of RAM resident while rendering, so prefer int8 on a 4 GB device |
 | Kokoro 82M int8 | ≈126 MB | 8 + Mandarin | Smaller download, but **int8 kernels underperform on ARM** and slow further as the device warms |
 | Kitten nano | ≈30 MB | English | Tiny and quick |
 | Piper Lite | ≈30 MB | English | Fast, flatter delivery |
