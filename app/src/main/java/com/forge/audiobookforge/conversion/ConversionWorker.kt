@@ -37,6 +37,33 @@ import java.io.File
  * that single constraint is what turns "TTS drains my battery" into "free while charging".
  */
 /**
+ * Below this, a render running on battery is paused so it cannot flatten the phone. Only
+ * reached when the user has turned the charging requirement off — with it on, WorkManager
+ * already stops the work when unplugged.
+ */
+internal const val LOW_BATTERY_PAUSE_PERCENT = 20
+
+/**
+ * Whether a render should pause for a low battery.
+ *
+ * [percent] is -1 when the battery level could not be read; an unknown level must never
+ * pause a render, because that would stop work for no reason and look like a crash.
+ */
+internal fun shouldPauseForLowBattery(percent: Int): Boolean = percent in 0..LOW_BATTERY_PAUSE_PERCENT
+
+/** Current battery percentage, or -1 if it cannot be read. */
+private fun batteryPercent(context: android.content.Context): Int {
+    val intent = context.registerReceiver(
+        null,
+        android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED),
+    ) ?: return -1
+    val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+    val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+    if (level < 0 || scale <= 0) return -1
+    return level * 100 / scale
+}
+
+/**
  * Comfortably above the slowest legitimate case (cloning is ~6x realtime on this hardware),
  * so this fires only when something is genuinely wrong — a pathological segment length, or a
  * device throttling hard. One line saying so turns a mysterious crawl into a diagnosis.
@@ -291,6 +318,9 @@ class ConversionWorker(
         // text (unsupported language, or a model that did not load properly). Without
         // this guard the book renders "successfully" as minutes of near-silence.
         var degenerateChunks = 0
+        // Set when this chapter stopped because the battery is low: the chapter must go back
+        // to PENDING (so a later Continue re-renders it), not FAILED.
+        var pausedForBattery = false
         try {
             for ((n, chunk) in chunks.withIndex()) {
                 // Prompt response to a WorkManager/scope cancellation, and to a
@@ -348,6 +378,21 @@ class ConversionWorker(
                     )
                 )
                 if (n % 4 == 0 || n == chunks.lastIndex) {
+                    // Pause rather than drain the phone flat. Guarded by the same setting as
+                    // the OS constraint: with charging required, WorkManager already stops.
+                    val pct = batteryPercent(applicationContext)
+                    if (shouldPauseForLowBattery(pct)) {
+                        val note = "Paused — battery at $pct%. Plug in and press Continue; " +
+                            "finished chapters are kept."
+                        log("pausing: $note")
+                        postProgress(
+                            applicationContext, book.title,
+                            (charsDoneOverall + charsDone).toFloat() / charsTotalOverall,
+                            note,
+                        )
+                        pausedForBattery = true
+                        throw kotlinx.coroutines.CancellationException("battery low")
+                    }
                     val etaMin = estimateEtaMinutes(chunks, charsDone, startedAt, book.chapters.size - ch.index)
                     postProgress(
                         applicationContext, book.title,
@@ -384,7 +429,7 @@ class ConversionWorker(
             // User stop OR system stop (constraint lost, app swiped away):
             // leave the chapter pending so resume picks it up cleanly. Only a
             // genuine synthesis error deserves the FAILED badge.
-            ch.status = if (isStopped || controller.isCancelled(runId)) {
+            ch.status = if (isStopped || controller.isCancelled(runId) || pausedForBattery) {
                 ChapterStatus.PENDING
             } else {
                 ChapterStatus.FAILED
