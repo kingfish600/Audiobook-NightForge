@@ -61,6 +61,15 @@ class ConversionWorker(
 
         // A fresh run clears any stale stop flag and claims ownership of the UI state.
         val runId = controller.beginRun()
+        // Record the engine the first time this book is forged. Deliberately not
+        // overwritten: if the active engine later differs, the UI can warn that resuming
+        // would mix voices, and the book keeps a truthful record of how it began.
+        if (book.engineId == null) {
+            container.models.ui.value.optionId?.let {
+                book.engineId = it
+                repo.save(book)
+            }
+        }
         log("worker started for '${book.title}' (${book.chapters.size} chapters)")
 
         // WorkManager starts workers at THREAD_PRIORITY_BACKGROUND; combined

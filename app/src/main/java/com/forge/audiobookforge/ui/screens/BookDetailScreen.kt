@@ -204,6 +204,41 @@ fun BookDetailScreen(bookId: String?) {
                         }
                     }
 
+                    // Which engine forged this book, and a warning when the active one has
+                    // since changed: continuing would switch narrator mid-book.
+                    val activeOptionId = container.models.ui.value.optionId
+                    val engineTitle: (String?) -> String? = { id ->
+                        id?.let { key ->
+                            com.forge.audiobookforge.tts.ModelManager.CATALOG
+                                .firstOrNull { it.id == key }?.title
+                                ?: key.removePrefix("local:")
+                        }
+                    }
+                    val forgedWith = engineTitle(book.engineId)
+                    val pendingWork = book.doneCount < book.chapters.size
+                    if (forgedWith != null) {
+                        val mismatch = pendingWork && activeOptionId != null &&
+                            book.engineId != activeOptionId
+                        Text(
+                            if (mismatch) {
+                                "Started with $forgedWith, but the active engine is " +
+                                    "${engineTitle(activeOptionId) ?: "another one"}. Continuing now " +
+                                    "would change the narrator part-way through."
+                            } else {
+                                "Forged with $forgedWith"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (mismatch) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (mismatch && com.forge.audiobookforge.tts.ModelManager.CATALOG
+                                .any { it.id == book.engineId }) {
+                            TextButton(onClick = { container.models.useModel(book.engineId!!) }) {
+                                Text("Switch back to $forgedWith")
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(6.dp))
                     var previewBusy by remember { mutableStateOf(false) }
                     OutlinedButton(

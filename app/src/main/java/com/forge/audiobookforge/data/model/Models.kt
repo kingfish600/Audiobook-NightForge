@@ -27,6 +27,12 @@ data class Book(
     var voiceSid: Int = 3,          // default voice (see Voices.kt)
     /** Cloned voice to speak with (see CloneStore); null = the engine's own voices. */
     var cloneName: String? = null,
+    /**
+     * Catalog id of the engine this book was first forged with, e.g. "kokoro-int8" or
+     * "piper-lessac". Recorded once and never overwritten: without it, switching engines
+     * and resuming silently changed the narrator's voice part-way through a book.
+     */
+    var engineId: String? = null,
     var speed: Float = 1.0f,
 ) {
     val doneCount: Int get() = chapters.count { it.status == ChapterStatus.DONE }
