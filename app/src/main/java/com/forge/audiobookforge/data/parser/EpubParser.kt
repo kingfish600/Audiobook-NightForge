@@ -15,7 +15,31 @@ object EpubParser {
     data class ParsedChapter(val title: String, val text: String)
     data class ParsedBook(val title: String?, val author: String?, val chapters: List<ParsedChapter>)
 
-    private const val MAX_TOTAL_BYTES = 300L * 1024 * 1024 // safety valve
+    internal const val MAX_TOTAL_BYTES = 300L * 1024 * 1024 // safety valve
+
+    /**
+     * Buffers one zip entry, refusing to hold more than [limit] bytes in total.
+     *
+     * The previous code read the whole entry and checked the running total afterwards —
+     * far too late. A small compressed entry can declare (and expand to) an enormous
+     * uncompressed size, so a hostile or merely corrupt EPUB put the entire thing in
+     * memory and crashed the app with an OutOfMemoryError before any check ran. Bounding
+     * the read means the failure is a clean, catchable error instead.
+     */
+    internal fun readBounded(input: InputStream, limit: Long): ByteArray {
+        require(limit >= 0) { "EPUB too large" }
+        val out = java.io.ByteArrayOutputStream(minOf(limit, 1L shl 20).toInt())
+        val buf = ByteArray(1 shl 16)
+        var read = 0L
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            read += n
+            require(read <= limit) { "EPUB too large" }
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
+    }
 
     fun parse(input: InputStream): ParsedBook {
         val entries = HashMap<String, ByteArray>()
@@ -24,9 +48,13 @@ object EpubParser {
             while (true) {
                 val e: ZipEntry = zip.nextEntry ?: break
                 if (!e.isDirectory) {
-                    val bytes = zip.readBytes()
+                    // Reject an entry that DECLARES more than we could hold, before allocating
+                    // anything (the declared size is -1 for streamed entries, hence the
+                    // bounded read below as the real protection).
+                    val declared = e.size
+                    require(declared < 0 || total + declared <= MAX_TOTAL_BYTES) { "EPUB too large" }
+                    val bytes = readBounded(zip, MAX_TOTAL_BYTES - total)
                     total += bytes.size
-                    check(total <= MAX_TOTAL_BYTES) { "EPUB too large" }
                     entries[e.name] = bytes
                 }
                 zip.closeEntry()
