@@ -118,8 +118,20 @@ object BookExporter {
                     src.inputStream().use { it.copyTo(out) }
                 } ?: error("Could not open the export destination")
                 childByName(context, bookDir, name)?.let { resolver.delete(it, null, null) }
-                runCatching { DocumentsContract.renameDocument(resolver, doc, name) }
-                exported++
+                // Same rule as the MediaStore path: a file still carrying its temporary name
+                // has not been exported under the name the user will look for, so it is not
+                // counted as one. The SAF provider is the only one that can tell us.
+                val renamedDoc = runCatching {
+                    DocumentsContract.renameDocument(resolver, doc, name)
+                }.getOrNull()
+                if (renamedDoc != null) {
+                    exported++
+                } else {
+                    android.util.Log.w(
+                        "NightForge",
+                        "export: wrote a temporary file but the SAF rename to $name failed",
+                    )
+                }
             } catch (t: Throwable) {
                 // Removes only the half-written replacement; the old export is intact.
                 runCatching { resolver.delete(doc, null, null) }

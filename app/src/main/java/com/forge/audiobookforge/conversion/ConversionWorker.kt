@@ -37,6 +37,12 @@ import java.io.File
  * that single constraint is what turns "TTS drains my battery" into "free while charging".
  */
 /**
+ * Thrown to stop a chapter because the battery is low. Distinct from a failure so the
+ * persistent message can be worded correctly, and so the pause is never reported as an error.
+ */
+private class BatteryPausedException(message: String) : Exception(message)
+
+/**
  * Below this, a render running on battery is paused so it cannot flatten the phone. Only
  * reached when the user has turned the charging requirement off — with it on, WorkManager
  * already stops the work when unplugged.
@@ -241,6 +247,13 @@ class ConversionWorker(
         } catch (_: kotlinx.coroutines.CancellationException) {
             // WorkManager cancelled us: state already saved per chapter, treat as graceful stop
             log("cancelled (user stop or system stop)")
+        } catch (t: BatteryPausedException) {
+            // Deliberate, not an error: keep the explanation on screen via the controller,
+            // and leave `failed` false so WorkManager records a successful stop.
+            log("paused for low battery: ${t.message}")
+            controller.fail(t.message ?: "Paused — battery low.", book.id)
+            // NOT a failure: `failed` stays false so the finally below completes normally and
+            // doWork reports success. The run simply stopped, with the reason left on screen.
         } catch (t: Throwable) {
             failed = true
             log("render failed: ${t.message ?: t.javaClass.simpleName}")
@@ -253,6 +266,8 @@ class ConversionWorker(
             // previews, and a native release poisons the process (a later
             // load would SIGSEGV). The engine stays warm for the next render.
             controller.endRun(runId)
+            // The battery pause already put its explanation on the controller, where endRun
+            // preserves it — so the notification can go, and no second signal is needed.
             NotificationManagerCompat.from(applicationContext).cancel(NOTIFICATION_ID)
         }
         if (failed) Result.failure() else Result.success()
@@ -391,7 +406,13 @@ class ConversionWorker(
                             note,
                         )
                         pausedForBattery = true
-                        throw kotlinx.coroutines.CancellationException("battery low")
+                        // A notification posted here is deleted moments later by the finally
+                        // below (and on a screen-off overnight render it would never surface),
+                        // which left the user with no signal at all — an idle screen and a
+                        // paused book reads exactly like a crash. Record it on the controller
+                        // instead: endRun deliberately preserves Failed, so the book screen
+                        // keeps showing why the render stopped until the next run.
+                        throw BatteryPausedException(note)
                     }
                     val etaMin = estimateEtaMinutes(chunks, charsDone, startedAt, book.chapters.size - ch.index)
                     postProgress(

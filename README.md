@@ -56,10 +56,12 @@ not for a whole library.
 
 **Output formats:** Opus (`.ogg`, resampled to an Opus-safe rate), AAC (`.m4a`), or WAV.
 **Single-file `.m4b`** bundles every chapter into one file, with per-chapter files left
-untouched. Chapter marks are written two ways: Nero `chpl` atoms always (capped at 255 —
-the box's limit, and the exported filename says so: `Book.Part255of260.m4b`), plus an
-Apple-style chapter track when the device's muxer supports one. If neither can be written
-the file is honestly named `Book.nochapters.m4b` rather than pretending.
+untouched. Chapter marks are written two ways where the container allows it: Nero `chpl`
+atoms, plus an Apple-style chapter track when the device's muxer supports one. Writing
+`chpl` requires the metadata box to be the file's last atom, so a streaming-layout file
+cannot take them; the 255-box limit is real, and the export says so in its filename
+(`Book.Part255of260.m4b`). When no chapter marks can be written at all, the file is
+honestly named `Book.nochapters.m4b` rather than pretending.
 
 ## Why not just use Moon+ Reader + a TTS engine?
 
@@ -78,16 +80,17 @@ Requirements: JDK 17, Android SDK (platform 34, build-tools 34).
 Output: `app/build/outputs/apk/debug/app-debug.apk`. Install on an arm64 device (Android 10+).
 
 First launch: download an engine from the in-app catalogue — pulled from k2-fsa's release
-assets, stored in app-private storage, fully offline after. Start with **Kokoro fp32**
-unless storage is tight.
+assets, stored in app-private storage, fully offline after. Start with **Kokoro int8** on a
+4 GB-RAM device; **Kokoro fp32** is the better pick on a flagship with RAM to spare.
 
 ## Tech notes
 
 - **sherpa-onnx v1.13.6**: prebuilt `arm64-v8a` JNI libs vendored under `app/src/main/jniLibs/`,
   Kotlin API wrapper vendored under `com.k2fsa.sherpa.onnx` — including the offline
   recogniser bindings used for clone transcription, from the same tag as the native libs.
-- **No third-party runtime deps** beyond AndroidX/Media3/WorkManager/kotlinx +
-  commons-compress (tar.bz2 extraction). EPUB/TXT/PDF parsing is hand-rolled and unit-tested.
+- **Runtime deps** are AndroidX/Media3/WorkManager/kotlinx, commons-compress (tar.bz2
+  extraction) and **pdfbox-android** (PDF text extraction). EPUB and TXT parsing are
+  hand-rolled and unit-tested.
 - Voice ids map to Kokoro's alphabetical `voices.bin` ordering (see `Voices.kt`).
 - Model installs are transactional: the working model is moved aside, the new one verified,
   then the backup dropped — a corrupt archive never destroys a working engine.
@@ -98,7 +101,7 @@ Multi-hour full-book renders, real EPUB content, per-chapter RTF tracked start t
 
 | Engine / mode | RTF cold | RTF sustained | Notes |
 |---|---|---|---|
-| Kokoro 82M **fp32**, 6 threads, stock clocks | 0.51 | ~0.59–0.60 plateau | default recommendation |
+| Kokoro 82M **fp32**, 6 threads, stock clocks | 0.51 | ~0.59–0.60 plateau | fastest *and* best quality where RAM allows |
 | Kokoro 82M **fp32**, 6 threads, perf mode | 0.44 | converges to ~0.59 | wins the first hour only |
 | Kokoro 82M **fp32**, **8 threads**, Night Forge mode | ~0.5 | **~0.62 flat at 1h+** | foreground-status fix defeats overnight throttling entirely |
 | Kokoro 82M int8, 6 threads | — | 0.7 → 1.7 spiral | ARM int8 kernels underperform |

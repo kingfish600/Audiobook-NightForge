@@ -3,6 +3,12 @@ package com.forge.audiobookforge.data.parser
 import com.forge.audiobookforge.util.TextOps
 import java.io.File
 
+/**
+ * Largest text file accepted. A book of this size is already ~2 million words — far beyond
+ * any real novel — while staying small enough that decoding it cannot threaten memory.
+ */
+internal const val MAX_TXT_BYTES = 64L * 1024 * 1024
+
 /** Plain-text book parser with chapter-heading heuristics. */
 object TxtParser {
 
@@ -37,7 +43,13 @@ object TxtParser {
     )
 
     fun parse(file: File): EpubParser.ParsedBook {
-        val text = decodeText(file.readBytes())
+        val text = decodeText(
+            // Bounded: a "text file" can be any size the picker offers, and reading a
+            // multi-gigabyte one exhausts memory before any validation runs.
+            file.inputStream().use {
+                com.forge.audiobookforge.util.BoundedRead.readAtMost(it, MAX_TXT_BYTES)
+            }
+        )
         val chapters = detectChapters(text)
         // Internal storage names are meaningless ("source"); let the caller fall
         // back to whatever the file picker reported instead.

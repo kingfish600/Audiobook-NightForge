@@ -142,8 +142,9 @@ class LibraryRepository(private val context: Context) {
         }
     }
 
-    @Synchronized
-
+    // (An @Synchronized left behind by the removed delete() used to sit here, silently
+    // putting this leaf query behind the repository monitor and blocking worker saves
+    // during an import. The query needs no lock.)
     private fun queryDisplayName(uri: Uri): String? =
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
