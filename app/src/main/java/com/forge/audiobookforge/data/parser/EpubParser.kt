@@ -10,6 +10,11 @@ import java.util.zip.ZipInputStream
  * ZIP -> META-INF/container.xml -> OPF (metadata + manifest + spine)
  * -> XHTML docs in spine order -> plain text chapters.
  */
+/** Shown when a book is refused for size — actionable, not a byte count. */
+internal const val EPUB_TOO_LARGE =
+    "This EPUB is too large to import (over 300 MB of content). " +
+        "Try a version without embedded images or audio."
+
 object EpubParser {
 
     data class ParsedChapter(val title: String, val text: String)
@@ -27,7 +32,7 @@ object EpubParser {
      * the read means the failure is a clean, catchable error instead.
      */
     internal fun readBounded(input: InputStream, limit: Long): ByteArray {
-        require(limit >= 0) { "EPUB too large" }
+        require(limit >= 0) { EPUB_TOO_LARGE }
         val out = java.io.ByteArrayOutputStream(minOf(limit, 1L shl 20).toInt())
         val buf = ByteArray(1 shl 16)
         var read = 0L
@@ -35,7 +40,7 @@ object EpubParser {
             val n = input.read(buf)
             if (n < 0) break
             read += n
-            require(read <= limit) { "EPUB too large" }
+            require(read <= limit) { EPUB_TOO_LARGE }
             out.write(buf, 0, n)
         }
         return out.toByteArray()
@@ -52,7 +57,7 @@ object EpubParser {
                     // anything (the declared size is -1 for streamed entries, hence the
                     // bounded read below as the real protection).
                     val declared = e.size
-                    require(declared < 0 || total + declared <= MAX_TOTAL_BYTES) { "EPUB too large" }
+                    require(declared < 0 || total + declared <= MAX_TOTAL_BYTES) { EPUB_TOO_LARGE }
                     val bytes = readBounded(zip, MAX_TOTAL_BYTES - total)
                     total += bytes.size
                     entries[e.name] = bytes

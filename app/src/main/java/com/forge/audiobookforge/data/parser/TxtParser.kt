@@ -9,6 +9,17 @@ import java.io.File
  */
 internal const val MAX_TXT_BYTES = 64L * 1024 * 1024
 
+/**
+ * Shown when a text file is refused for size.
+ *
+ * The bounded reader's own exception says "Input exceeds 67108864 bytes", which reached the
+ * user verbatim through the import result and reads like a crash. Every rejection a person can
+ * cause should say what happened and what to do about it.
+ */
+internal fun oversizedTextMessage(limitBytes: Long): String =
+    "That text file is too large to import (over ${limitBytes / (1024 * 1024)} MB). " +
+        "Try splitting it into parts, or converting it to EPUB."
+
 /** Plain-text book parser with chapter-heading heuristics. */
 object TxtParser {
 
@@ -47,7 +58,11 @@ object TxtParser {
             // Bounded: a "text file" can be any size the picker offers, and reading a
             // multi-gigabyte one exhausts memory before any validation runs.
             file.inputStream().use {
-                com.forge.audiobookforge.util.BoundedRead.readAtMost(it, MAX_TXT_BYTES)
+                try {
+                    com.forge.audiobookforge.util.BoundedRead.readAtMost(it, MAX_TXT_BYTES)
+                } catch (_: com.forge.audiobookforge.util.BoundedRead.TooLarge) {
+                    throw IllegalArgumentException(oversizedTextMessage(MAX_TXT_BYTES))
+                }
             }
         )
         val chapters = detectChapters(text)

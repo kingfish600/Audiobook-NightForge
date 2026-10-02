@@ -1,0 +1,9 @@
+Voice cloning: read your books in any voice — record a reference in the app, or import
+a clip and let the app transcribe it. Install several TTS engines at once and switch
+between them without restarting. Dutch voices (Piper ronnie and pim), plus Kokoro,
+Kitten and ZipVoice. Opus, WAV and single-file M4B output with chapter marks.
+
+Rendering now waits for a charger by default and pauses if the battery drops below 20%.
+Import is guarded against hostile or oversized files, and refused files now explain
+themselves in plain language rather than quoting a byte count. Progress is weighted by
+text length rather than chapter count.
