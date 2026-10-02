@@ -166,7 +166,15 @@ class KokoroEngine {
             // Read once, here, on the loading thread. numSpeakers() is @Synchronized and
             // was being called during Compose composition, so a UI rebuild mid-render
             // blocked the main thread behind a chunk of synthesis.
-            loadedSpeakers = runCatching { tts?.numSpeakers() ?: 0 }.getOrDefault(0)
+            // A swallowed failure here reads as 0 speakers, and the UI interprets 0 as
+            // "single-voice engine" - it disables the voice picker with no explanation. Since
+            // numSpeakers() is the call that historically caused a use-after-free, log the
+            // failure so a genuine one is diagnosable instead of looking like a design choice.
+            loadedSpeakers = runCatching { tts?.numSpeakers() ?: 0 }
+                .onFailure {
+                    android.util.Log.w("NightForge", "engine: could not read the speaker count", it)
+                }
+                .getOrDefault(0)
             null
         } catch (t: Throwable) {
             // Init failed: the previous engine (if any) is untouched — the
