@@ -8,6 +8,21 @@ audiobook.
 Designed around a simple insight: *real-time TTS reading fights your battery and
 stutters; rendering while charging eliminates both.*
 
+## Download
+
+**[Get the latest APK](https://github.com/kingfish600/Audiobook-NightForge/releases/latest)** — no
+account, no Play Store, nothing to sign up for.
+
+- **Android 10 or newer, 64-bit ARM** (`arm64-v8a`). It will not install on 32-bit or Intel/x86 devices.
+- About 36 MB. Allow "install from this source" the first time, then tap Install.
+- On first launch, download an engine from the in-app list — Kokoro int8 is the smallest at ~126 MB.
+- Every release lists the APK's SHA-256 and its signing-certificate fingerprint, so a download can be
+  checked before it is installed.
+
+Prefer a store? It is in F-Droid review
+([MR 47188](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/47188)); until that lands, the APK
+above is the way to install it.
+
 ## Engines
 
 Pick one engine, or install several and switch between them without restarting the app
