@@ -20,6 +20,13 @@ class CloneStore(private val root: File) {
 
     companion object {
         /**
+         * Ceiling for any file that claims to be a voice clip. Far beyond any useful reference
+         * (minutes of 24 kHz PCM) while small enough that reading one cannot exhaust memory.
+         * The settings screen uses this too, so "too big" has ONE definition.
+         */
+        const val MAX_CLIP_BYTES = 50L * 1024 * 1024
+
+        /**
          * Below this a reference teaches the model almost nothing. This is the hard floor for
          * an imported clip; the in-app recorder asks for more (VoiceRecorder.MIN_SECONDS, 4s)
          * because it can guide the user there.
@@ -98,13 +105,29 @@ class CloneStore(private val root: File) {
         val tmp = File(root, "recording.tmp.wav")
         return try {
             Wav.write(tmp, samples, rate)
-            add(name, tmp.readBytes(), text)
+            // Bounded: the recorder has no maximum duration, so a long take would otherwise be
+            // read into memory whole before [add] could reject it.
+            val bytes = readClip(tmp) ?: return "That recording is too long to use as a clip."
+            add(name, bytes, text)
         } catch (e: Exception) {
             "Could not save the recording."
         } finally {
             tmp.delete()
         }
     }
+
+    /**
+     * Reads a clip from disk, refusing to buffer more than [MAX_CLIP_BYTES].
+     *
+     * Every path that feeds [add] must come through here: reading first and validating
+     * afterwards is what let a huge file exhaust memory before the length check ran. That was
+     * fixed for the file picker, and was still present in the two paths below.
+     */
+    private fun readClip(file: File): ByteArray? = runCatching {
+        file.inputStream().use {
+            com.forge.audiobookforge.util.BoundedRead.readAtMost(it, MAX_CLIP_BYTES)
+        }
+    }.getOrNull()
 
     fun delete(name: String) {
         wavFor(name).delete()
@@ -135,7 +158,10 @@ class CloneStore(private val root: File) {
             ?.forEach { wav ->
                 val transcript = transcripts[wav.name]
                 if (transcript.isNullOrBlank()) return@forEach
-                if (add(wav.nameWithoutExtension, wav.readBytes(), transcript) == null) added++
+                // Bounded: these come from a downloaded engine bundle, so their size is not
+                // something this app controls.
+                val bytes = readClip(wav) ?: return@forEach
+                if (add(wav.nameWithoutExtension, bytes, transcript) == null) added++
             }
         return added
     }

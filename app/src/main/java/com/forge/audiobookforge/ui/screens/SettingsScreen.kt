@@ -175,7 +175,7 @@ fun SettingsScreen() {
                         var tooLarge = false
                         val bytes = runCatching {
                             cloneCtx.contentResolver.openInputStream(uri)?.use { stream ->
-                                com.forge.audiobookforge.util.BoundedRead.readAtMost(stream, MAX_CLIP_BYTES)
+                                com.forge.audiobookforge.util.BoundedRead.readAtMost(stream, com.forge.audiobookforge.tts.CloneStore.MAX_CLIP_BYTES)
                             }
                         }.onFailure {
                             tooLarge = it is com.forge.audiobookforge.util.BoundedRead.TooLarge
@@ -183,7 +183,7 @@ fun SettingsScreen() {
                         val problem = bytes?.let { container.clones.problemWith(it) }
                         if (tooLarge) {
                             cloneStatus = "That audio file is too large to use as a voice clip " +
-                                "(max ${MAX_CLIP_BYTES / (1024 * 1024)} MB). Pick a short recording — " +
+                                "(max ${com.forge.audiobookforge.tts.CloneStore.MAX_CLIP_BYTES / (1024 * 1024)} MB). Pick a short recording — " +
                                 "a few seconds is all a clone needs."
                         } else if (bytes == null) {
                             cloneStatus = "Could not read that file."
@@ -713,12 +713,6 @@ fun SettingsScreen() {
  * Because the user reads a prepared script, the transcript is known exactly — no
  * typing, and no risk of a mismatch quietly wrecking the clone.
  */
-/**
- * Ceiling for a voice-clone reference clip. 50 MB is far more than any useful clip (a few
- * minutes of 24 kHz PCM) while still being small enough to never threaten memory.
- */
-private const val MAX_CLIP_BYTES = 50L * 1024 * 1024
-
 @Composable
 private fun RecordVoiceDialog(
     container: com.forge.audiobookforge.di.ContainerApi,

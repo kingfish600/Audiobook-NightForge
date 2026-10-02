@@ -50,4 +50,13 @@ class BoundedReadTest {
         assertTrue("must allow minutes of 24 kHz PCM", fifty > 24_000L * 2 * 60 * 5)
         assertTrue("must not be a memory risk", fifty < 512L * 1024 * 1024)
     }
+
+    @Test
+    fun everyClipPathSharesOneCeiling() {
+        // The settings screen and the store must agree, or a clip accepted by one is rejected
+        // by the other. A single constant is the fix for that whole class of drift.
+        val shared = com.forge.audiobookforge.tts.CloneStore.MAX_CLIP_BYTES
+        assertTrue("must allow minutes of speech", shared > 24_000L * 2 * 60 * 5)
+        assertTrue("must not be a memory risk", shared < 512L * 1024 * 1024)
+    }
 }
